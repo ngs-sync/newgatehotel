@@ -5,17 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SaaS Super Admin - New Gates</title>
     
-    <!-- 1. Import Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- 2. Import React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     
-    <!-- 3. Import Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
-    <!-- 4. Import Supabase JS (V2) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <style>
@@ -35,9 +31,7 @@
         const SUPABASE_ANON_KEY = 'sb_publishable_Jk23sVPoYwengKLIjL78ww_Az4d7Tl-';
         
         const isConfigured = SUPABASE_URL.startsWith('http');
-        const supabase = isConfigured 
-            ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-            : { auth: { getSession: async () => ({ data: { session: null } }), onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }) } };
+        const supabase = isConfigured ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
         const { useState, useEffect } = React;
 
@@ -45,12 +39,12 @@
         // 🧩 2. KOMPONEN UI REUSABLE
         // ==========================================
         const Icons = {
-            Dashboard: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>,
             Building: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>,
             Copy: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>,
             Plus: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>,
             Logout: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>,
-            Close: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            Close: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>,
+            User: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
         };
 
         const Toast = ({ message, type, onClose }) => {
@@ -58,29 +52,22 @@
                 const timer = setTimeout(onClose, 3000);
                 return () => clearTimeout(timer);
             }, [message]);
-
             if (!message) return null;
             const bg = type === 'error' ? 'bg-red-500' : 'bg-gray-800';
             return (
-                <div className={`fixed bottom-5 right-5 ${bg} text-white px-6 py-3 rounded-lg shadow-xl flex items-center z-50 transition-all`}>
+                <div className={`fixed bottom-5 right-5 ${bg} text-white px-6 py-3 rounded-lg shadow-xl flex items-center z-50`}>
                     <span>{message}</span>
                 </div>
             );
         };
 
-        // Fungsi copy to clipboard yang aman untuk iFrame
         const copyToClipboard = (text, showToast) => {
-            const el = document.createElement('textarea');
-            el.value = text;
-            document.body.appendChild(el);
-            el.select();
-            document.execCommand('copy');
-            document.body.removeChild(el);
-            showToast("Kode Hotel berhasil disalin!", "success");
+            navigator.clipboard.writeText(text);
+            showToast("Kode disalin!", "success");
         };
 
         // ==========================================
-        // 🔐 3. HALAMAN LOGIN SUPER ADMIN
+        // 🔐 3. HALAMAN LOGIN SUPER ADMIN (Sistem Manual Opsi C)
         // ==========================================
         const AdminLogin = ({ onLoginSuccess, showToast }) => {
             const [email, setEmail] = useState('');
@@ -91,18 +78,23 @@
                 e.preventDefault();
                 setLoading(true);
                 try {
-                    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-                    if (error) throw error;
-                    
-                    // Verifikasi apakah yang login benar-benar Super Admin
-                    const role = data.session.user.app_metadata?.role;
-                    if (role !== 'super_admin') {
-                        await supabase.auth.signOut();
-                        throw new Error("Akses Ditolak! Anda bukan Super Admin.");
+                    // Cek ke tabel profiles buatan kita
+                    const { data, error } = await supabase
+                        .from('profiles')
+                        .select('*')
+                        .eq('email', email)
+                        .eq('password', password)
+                        .eq('role', 'super_admin')
+                        .single();
+
+                    if (error || !data) {
+                        throw new Error("Kredensial salah atau Anda bukan Super Admin.");
                     }
 
                     showToast("Selamat datang, Super Admin!");
-                    onLoginSuccess(data.session);
+                    // Simpan data user ke localStorage (sebagai sesi sederhana)
+                    localStorage.setItem('admin_session', JSON.stringify(data));
+                    onLoginSuccess(data);
                 } catch (error) {
                     showToast(error.message, "error");
                 } finally {
@@ -118,20 +110,19 @@
                                 <Icons.Building className="w-8 h-8 text-white" />
                             </div>
                             <h1 className="text-2xl font-bold text-white">SaaS Control Center</h1>
-                            <p className="text-gray-400 mt-2 text-sm">Masuk sebagai Super Admin</p>
+                            <p className="text-gray-400 mt-2 text-sm">Login Super Admin</p>
                         </div>
-
                         <form onSubmit={handleLogin} className="space-y-5">
                             <div>
                                 <label className="block text-sm font-medium text-gray-300 mb-1">Email Master</label>
-                                <input type="email" required className="w-full bg-gray-700 border border-gray-600 text-white p-3 rounded-lg focus:ring-blue-500 focus:border-blue-500 placeholder-gray-500" placeholder="admin@newgates.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+                                <input type="email" required className="w-full bg-gray-700 border border-gray-600 text-white p-3 rounded-lg focus:ring-blue-500" placeholder="admin@newgates.com" value={email} onChange={(e) => setEmail(e.target.value)} />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-300 mb-1">Password</label>
-                                <input type="password" required className="w-full bg-gray-700 border border-gray-600 text-white p-3 rounded-lg focus:ring-blue-500 focus:border-blue-500" value={password} onChange={(e) => setPassword(e.target.value)} />
+                                <input type="password" required className="w-full bg-gray-700 border border-gray-600 text-white p-3 rounded-lg focus:ring-blue-500" placeholder="admin123" value={password} onChange={(e) => setPassword(e.target.value)} />
                             </div>
                             <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-colors mt-4">
-                                {loading ? 'Memverifikasi Akses...' : 'Akses Control Center'}
+                                {loading ? 'Memverifikasi...' : 'Akses Control Center'}
                             </button>
                         </form>
                     </div>
@@ -140,45 +131,64 @@
         };
 
         // ==========================================
-        // 🏨 4. MANAJEMEN KLIEN (TENANTS)
+        // 🏨 4. MANAJEMEN KLIEN (FORM 2-IN-1 SAKTI)
         // ==========================================
         const TenantsManager = ({ showToast }) => {
             const [tenants, setTenants] = useState([]);
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [loading, setLoading] = useState(false);
-            const [newTenant, setNewTenant] = useState({ name: '', plan: 'starter', is_active: true });
+            
+            // State form digabung untuk Hotel & Adminnya
+            const [form, setForm] = useState({
+                // Data Hotel
+                tenant_id: '', name: '', plan: 'starter', is_active: true,
+                // Data Hotel Admin
+                admin_name: '', admin_email: '', admin_phone: '', admin_password: 'manual by super admin'
+            });
 
             const fetchTenants = async () => {
                 const { data, error } = await supabase.from('tenants').select('*').order('created_at', { ascending: false });
                 if (data) setTenants(data);
-                if (error) showToast("Gagal mengambil data klien", "error");
             };
 
             useEffect(() => { fetchTenants(); }, []);
 
-            const handleCreateTenant = async (e) => {
+            const handleCreateClient = async (e) => {
                 e.preventDefault();
                 setLoading(true);
                 try {
-                    const { error } = await supabase.from('tenants').insert([newTenant]);
-                    if (error) throw error;
-                    
-                    showToast("Hotel/Klien baru berhasil ditambahkan!");
+                    // 1. Simpan Data Hotel (Tenant)
+                    const { error: errTenant } = await supabase.from('tenants').insert([{
+                        id: form.tenant_id,
+                        name: form.name,
+                        plan: form.plan,
+                        is_active: form.is_active
+                    }]);
+                    if (errTenant) throw new Error("Gagal membuat Hotel. Kode ID mungkin sudah dipakai.");
+
+                    // 2. Simpan Data Akun Hotel Admin
+                    const { error: errAdmin } = await supabase.from('profiles').insert([{
+                        tenant_id: form.tenant_id,
+                        email: form.admin_email,
+                        password: form.admin_password,
+                        role: 'hotel_admin',
+                        full_name: form.admin_name,
+                        phone: form.admin_phone
+                    }]);
+                    if (errAdmin) throw new Error("Hotel dibuat, tapi gagal membuat akun Admin: " + errAdmin.message);
+
+                    showToast("Sukses! Hotel & Akun Admin berhasil dibuat.", "success");
                     setIsModalOpen(false);
-                    setNewTenant({ name: '', plan: 'starter', is_active: true });
+                    // Reset form
+                    setForm({
+                        tenant_id: '', name: '', plan: 'starter', is_active: true,
+                        admin_name: '', admin_email: '', admin_phone: '', admin_password: 'manual by super admin'
+                    });
                     fetchTenants();
                 } catch (err) {
                     showToast(err.message, "error");
                 } finally {
                     setLoading(false);
-                }
-            };
-
-            const toggleStatus = async (id, currentStatus) => {
-                const { error } = await supabase.from('tenants').update({ is_active: !currentStatus }).eq('id', id);
-                if (!error) {
-                    showToast("Status klien diubah");
-                    fetchTenants();
                 }
             };
 
@@ -189,96 +199,124 @@
                             <h2 className="text-xl font-bold text-gray-800">Manajemen Klien (Hotel)</h2>
                             <p className="text-sm text-gray-500">Daftar semua hotel yang menggunakan SaaS kamu.</p>
                         </div>
-                        <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg flex items-center gap-2 font-medium transition-colors">
-                            <Icons.Plus /> Tambah Hotel Klien
+                        <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg flex items-center gap-2 font-medium">
+                            <Icons.Plus /> Registrasi Hotel Baru
                         </button>
                     </div>
 
+                    {/* Tabel Daftar Hotel */}
                     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-gray-50 border-b border-gray-200">
-                                        <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Nama Hotel</th>
-                                        <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Kode Hotel (ID)</th>
-                                        <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Paket SaaS</th>
-                                        <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                                        <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Aksi</th>
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-gray-50 border-b border-gray-200">
+                                    <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Nama Hotel</th>
+                                    <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Kode Hotel (ID)</th>
+                                    <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Paket SaaS</th>
+                                    <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {tenants.map(tenant => (
+                                    <tr key={tenant.id} className="hover:bg-gray-50">
+                                        <td className="p-4 font-medium text-gray-900">{tenant.name}</td>
+                                        <td className="p-4">
+                                            <div className="flex items-center gap-2">
+                                                <code className="bg-gray-100 text-pink-600 px-2 py-1 rounded text-xs font-mono font-bold">{tenant.id}</code>
+                                                <button onClick={() => copyToClipboard(tenant.id, showToast)} className="text-gray-400 hover:text-blue-600"><Icons.Copy /></button>
+                                            </div>
+                                        </td>
+                                        <td className="p-4">
+                                            <span className="px-2.5 py-1 rounded-full text-xs font-semibold uppercase bg-blue-100 text-blue-700">{tenant.plan}</span>
+                                        </td>
+                                        <td className="p-4">
+                                            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${tenant.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                {tenant.is_active ? 'Aktif' : 'Suspend'}
+                                            </span>
+                                        </td>
                                     </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    {tenants.map(tenant => (
-                                        <tr key={tenant.id} className="hover:bg-gray-50 transition-colors">
-                                            <td className="p-4 font-medium text-gray-900">{tenant.name}</td>
-                                            <td className="p-4">
-                                                <div className="flex items-center gap-2">
-                                                    <code className="bg-gray-100 text-pink-600 px-2 py-1 rounded text-xs font-mono">{tenant.id}</code>
-                                                    <button onClick={() => copyToClipboard(tenant.id, showToast)} className="text-gray-400 hover:text-blue-600 p-1" title="Copy Kode">
-                                                        <Icons.Copy />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                            <td className="p-4">
-                                                <span className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase 
-                                                    ${tenant.plan === 'enterprise' ? 'bg-purple-100 text-purple-700' : 
-                                                      tenant.plan === 'pro' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}>
-                                                    {tenant.plan}
-                                                </span>
-                                            </td>
-                                            <td className="p-4">
-                                                <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${tenant.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                                    {tenant.is_active ? 'Aktif' : 'Suspend'}
-                                                </span>
-                                            </td>
-                                            <td className="p-4 text-right">
-                                                <button onClick={() => toggleStatus(tenant.id, tenant.is_active)} className={`text-xs font-medium px-3 py-1.5 rounded border ${tenant.is_active ? 'border-red-200 text-red-600 hover:bg-red-50' : 'border-green-200 text-green-600 hover:bg-green-50'}`}>
-                                                    {tenant.is_active ? 'Matikan Akses' : 'Aktifkan'}
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {tenants.length === 0 && (
-                                        <tr><td colSpan="5" className="p-8 text-center text-gray-500">Belum ada klien hotel yang didaftarkan.</td></tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
 
-                    {/* Modal Tambah Klien */}
+                    {/* Modal Tambah Klien & Admin (Form 2-in-1) */}
                     {isModalOpen && (
-                        <div className="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center p-4 z-50">
-                            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+                        <div className="fixed inset-0 bg-gray-900 bg-opacity-60 flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
                                 <div className="flex justify-between items-center p-5 border-b border-gray-100">
-                                    <h3 className="text-lg font-bold text-gray-800">Pendaftaran Hotel Klien Baru</h3>
+                                    <h3 className="text-lg font-bold text-gray-800">Setup Klien & Admin Baru</h3>
                                     <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600"><Icons.Close /></button>
                                 </div>
-                                <form onSubmit={handleCreateTenant} className="p-5 space-y-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Nama / Merk Hotel</label>
-                                        <input required type="text" className="w-full border p-2.5 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-500" placeholder="Cth: Grand Vibe Hotel" value={newTenant.name} onChange={e=>setNewTenant({...newTenant, name: e.target.value})} />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Paket Langganan (SaaS Plan)</label>
-                                        <select className="w-full border p-2.5 rounded-lg focus:ring-2 focus:ring-blue-100" value={newTenant.plan} onChange={e=>setNewTenant({...newTenant, plan: e.target.value})}>
-                                            <option value="starter">Starter (Maks 20 Kamar)</option>
-                                            <option value="pro">Pro (Maks 100 Kamar)</option>
-                                            <option value="enterprise">Enterprise (Unlimited)</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="flex items-center gap-2 cursor-pointer mt-2">
-                                            <input type="checkbox" className="w-4 h-4 text-blue-600 rounded" checked={newTenant.is_active} onChange={e=>setNewTenant({...newTenant, is_active: e.target.checked})} />
-                                            <span className="text-sm text-gray-700 font-medium">Langsung Aktifkan Hotel</span>
-                                        </label>
-                                    </div>
-                                    <div className="pt-4 flex gap-3">
-                                        <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 font-medium">Batal</button>
-                                        <button type="submit" disabled={loading} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
-                                            {loading ? 'Menyimpan...' : 'Buat Hotel'}
-                                        </button>
-                                    </div>
-                                </form>
+                                
+                                <div className="p-6 overflow-y-auto hide-scroll flex-1">
+                                    <form id="setupForm" onSubmit={handleCreateClient} className="space-y-6">
+                                        
+                                        {/* Bagian 1: Data Hotel */}
+                                        <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                                            <h4 className="flex items-center gap-2 font-bold text-blue-800 border-b border-blue-200 pb-2 mb-4">
+                                                <Icons.Building /> 1. Detail Hotel / Properti
+                                            </h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">Kode Hotel Manual *</label>
+                                                    <input required type="text" className="w-full border p-2.5 rounded-lg uppercase" placeholder="Cth: GATES-001" 
+                                                        value={form.tenant_id} onChange={e=>setForm({...form, tenant_id: e.target.value.toUpperCase()})} />
+                                                    <p className="text-[10px] text-gray-500 mt-1">Kode ini akan dipakai resepsionis saat login.</p>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">Nama / Merk Hotel *</label>
+                                                    <input required type="text" className="w-full border p-2.5 rounded-lg" placeholder="Cth: Grand Vibe Hotel" 
+                                                        value={form.name} onChange={e=>setForm({...form, name: e.target.value})} />
+                                                </div>
+                                                <div className="md:col-span-2">
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">Paket Langganan</label>
+                                                    <select className="w-full border p-2.5 rounded-lg" value={form.plan} onChange={e=>setForm({...form, plan: e.target.value})}>
+                                                        <option value="starter">Starter (Maks 20 Kamar)</option>
+                                                        <option value="pro">Pro (Maks 100 Kamar)</option>
+                                                        <option value="enterprise">Enterprise (Unlimited)</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Bagian 2: Data Akun Admin */}
+                                        <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
+                                            <h4 className="flex items-center gap-2 font-bold text-purple-800 border-b border-purple-200 pb-2 mb-4">
+                                                <Icons.User /> 2. Buat Akun Manager / Hotel Admin
+                                            </h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">Nama Lengkap *</label>
+                                                    <input required type="text" className="w-full border p-2.5 rounded-lg" placeholder="Cth: Budi Santoso" 
+                                                        value={form.admin_name} onChange={e=>setForm({...form, admin_name: e.target.value})} />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">No. Telepon / WhatsApp</label>
+                                                    <input type="text" className="w-full border p-2.5 rounded-lg" placeholder="0812xxxxxx" 
+                                                        value={form.admin_phone} onChange={e=>setForm({...form, admin_phone: e.target.value})} />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">Email (Untuk Login) *</label>
+                                                    <input required type="email" className="w-full border p-2.5 rounded-lg" placeholder="budi@hotel.com" 
+                                                        value={form.admin_email} onChange={e=>setForm({...form, admin_email: e.target.value})} />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">Password Default</label>
+                                                    <input type="text" className="w-full border p-2.5 rounded-lg bg-gray-100 text-gray-600" 
+                                                        value={form.admin_password} onChange={e=>setForm({...form, admin_password: e.target.value})} />
+                                                    <p className="text-[10px] text-gray-500 mt-1">Kamu bisa ubah atau biarkan default.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                    </form>
+                                </div>
+                                <div className="p-5 border-t border-gray-100 flex gap-3 bg-gray-50 rounded-b-2xl">
+                                    <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-4 py-3 text-gray-600 bg-white border border-gray-300 rounded-xl font-medium">Batal</button>
+                                    <button form="setupForm" type="submit" disabled={loading} className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/30">
+                                        {loading ? 'Menyimpan...' : 'Buat Hotel & Admin'}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -292,59 +330,53 @@
         const AppAdmin = () => {
             const [session, setSession] = useState(null);
             const [toast, setToast] = useState({ message: '', type: '' });
-
             const showToast = (message, type = 'success') => setToast({ message, type });
 
+            // Cek localStorage saat pertama kali dimuat
             useEffect(() => {
-                supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
-                const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
-                return () => subscription.unsubscribe();
+                const savedSession = localStorage.getItem('admin_session');
+                if (savedSession) setSession(JSON.parse(savedSession));
             }, []);
+
+            const handleLogout = () => {
+                localStorage.removeItem('admin_session');
+                setSession(null);
+            };
 
             if (!isConfigured) {
                 return (
-                    <div className="min-h-screen flex items-center justify-center bg-gray-900 p-4">
-                        <div className="bg-gray-800 p-8 rounded-2xl shadow-xl w-full max-w-md text-center border-t-4 border-yellow-500">
-                            <h1 className="text-2xl font-bold text-white mb-2">Setup Admin Diperlukan</h1>
-                            <p className="text-gray-400 mb-6 text-sm">Masukkan URL dan API Key Supabase di file <code className="text-pink-400">internal-admin.html</code>.</p>
+                    <div className="min-h-screen flex items-center justify-center bg-gray-900">
+                        <div className="bg-gray-800 p-8 rounded-xl text-center">
+                            <h1 className="text-white text-xl font-bold">Setup Diperlukan</h1>
+                            <p className="text-gray-400">Masukkan URL dan API Key Supabase.</p>
                         </div>
                     </div>
                 );
             }
 
-            if (!session) {
-                return <AdminLogin onLoginSuccess={setSession} showToast={showToast} />;
-            }
+            if (!session) return <AdminLogin onLoginSuccess={setSession} showToast={showToast} />;
 
             return (
                 <div className="flex h-screen bg-gray-100 font-sans">
-                    {/* Sidebar Gelap Khusus Admin */}
                     <div className="w-64 bg-gray-900 text-gray-300 flex flex-col shadow-2xl z-20">
                         <div className="p-6 border-b border-gray-800">
-                            <div className="flex items-center gap-3 text-white mb-1">
-                                <div className="bg-blue-600 p-1.5 rounded-lg"><Icons.Building /></div>
-                                <h1 className="text-lg font-bold">New Gates</h1>
-                            </div>
-                            <p className="text-xs text-gray-500 ml-9 uppercase tracking-widest">Super Admin</p>
+                            <h1 className="text-xl font-bold text-white flex items-center gap-2"><Icons.Building/> New Gates</h1>
+                            <p className="text-xs text-gray-500 uppercase tracking-widest mt-1">{session.full_name}</p>
                         </div>
                         <nav className="flex-1 p-4">
                             <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-blue-600 text-white font-medium shadow-lg shadow-blue-900/20">
                                 <Icons.Building /> Klien / Hotel
                             </button>
-                            {/* Menu lain bisa ditambahkan di sini (Billing, dll) */}
                         </nav>
                         <div className="p-4 border-t border-gray-800">
-                            <button onClick={() => supabase.auth.signOut()} className="w-full flex items-center gap-3 px-4 py-3 text-gray-400 hover:text-white hover:bg-gray-800 rounded-xl transition-colors">
+                            <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-gray-800 rounded-xl transition-colors">
                                 <Icons.Logout /> Keluar Admin
                             </button>
                         </div>
                     </div>
-
-                    {/* Area Konten */}
                     <main className="flex-1 overflow-y-auto p-8 bg-[#f8fafc]">
                         <TenantsManager showToast={showToast} />
                     </main>
-
                     <Toast message={toast.message} type={toast.type} onClose={() => setToast({ message: '', type: '' })} />
                 </div>
             );
