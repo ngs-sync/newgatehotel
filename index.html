@@ -69,17 +69,22 @@
                 e.preventDefault();
                 setLoading(true);
                 try {
-                    // Cari data staf berdasarkan Kode Hotel, Email, dan Password di tabel profiles kita
+                    // MENGGUNAKAN maybeSingle() UNTUK MENCEGAH ERROR 406
                     const { data, error } = await supabase
                         .from('profiles')
-                        .select('*, tenants(name)')
+                        .select('*')
                         .eq('tenant_id', formData.tenant_id.toUpperCase())
                         .eq('email', formData.email)
                         .eq('password', formData.password)
-                        .single();
+                        .maybeSingle();
 
-                    if (error || !data) {
-                        throw new Error("Login gagal. Cek kembali Kode Hotel, Email, atau Password Anda.");
+                    if (error) {
+                        console.error("Supabase Error:", error);
+                        throw new Error("Terjadi kesalahan database. Pastikan SQL Opsi C sudah di-run.");
+                    }
+
+                    if (!data) {
+                        throw new Error("Login gagal. Kode Hotel, Email, atau Password salah.");
                     }
 
                     if (!data.is_active) {
@@ -87,7 +92,6 @@
                     }
 
                     showToast(`Selamat datang, ${data.full_name}!`, "success");
-                    // Simpan sesi ke localStorage
                     localStorage.setItem('hotel_session', JSON.stringify(data));
                     onLoginSuccess(data);
 
@@ -110,13 +114,13 @@
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Kode Hotel</label>
                                 <input type="text" required className="w-full border p-3 rounded-lg uppercase" 
                                     placeholder="Cth: GATES-001" 
-                                    value={formData.tenant_id} onChange={(e) => setFormData({...formData, tenant_id: e.target.value})} />
+                                    value={formData.tenant_id} onChange={(e) => setFormData({...formData, tenant_id: e.target.value.trim()})} />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Email Staf/Admin</label>
                                 <input type="email" required className="w-full border p-3 rounded-lg" 
                                     placeholder="email@hotel.com"
-                                    value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} />
+                                    value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value.trim()})} />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
@@ -141,7 +145,6 @@
             useEffect(() => {
                 const fetchStats = async () => {
                     try {
-                        // WAJIB tambahkan .eq('tenant_id', tenantId) di setiap query untuk isolasi data!
                         const [resRooms, resBookings] = await Promise.all([
                             supabase.from('rooms').select('id', { count: 'exact' }).eq('tenant_id', tenantId),
                             supabase.from('reservations').select('total_amount').eq('tenant_id', tenantId)
@@ -256,7 +259,6 @@
                 e.preventDefault();
                 setLoading(true);
                 try {
-                    // Wajib menyisipkan tenant_id agar data tersimpan di "laci" hotel yang benar
                     const { error } = await supabase.from('reservations').insert([{
                         tenant_id: tenantId, 
                         reservation_number: 'RES-' + Math.floor(Math.random() * 100000),
@@ -371,7 +373,6 @@
 
             const showToast = (message, type = 'success') => setToast({ message, type });
 
-            // Ambil sesi manual dari localStorage saat web dimuat
             useEffect(() => {
                 const savedSession = localStorage.getItem('hotel_session');
                 if (savedSession) {
@@ -399,9 +400,8 @@
                 return <LoginScreen onLoginSuccess={setSession} showToast={showToast} />;
             }
 
-            // Dapatkan tenant_id (Kode Hotel) dari sesi yang aktif
             const tenantId = session.tenant_id;
-            const hotelName = session.tenants?.name || 'Hotel Saya';
+            const hotelName = tenantId || 'Hotel Saya'; // Disederhanakan untuk mencegah error join table
 
             const navItems = [
                 { id: 'dashboard', label: 'Dashboard', icon: <Icons.Home /> },
@@ -411,10 +411,9 @@
 
             return (
                 <div className="flex h-screen bg-gray-100 font-sans">
-                    {/* Sidebar Desktop */}
                     <div className="hidden md:flex flex-col w-64 bg-white border-r border-gray-200 shadow-sm">
                         <div className="p-6 border-b border-gray-100">
-                            <h1 className="text-xl font-bold text-blue-700 truncate">{hotelName}</h1>
+                            <h1 className="text-xl font-bold text-blue-700 truncate">SaaS PMS</h1>
                             <p className="text-xs text-gray-500 mt-1 uppercase font-semibold">[{tenantId}]</p>
                             <p className="text-xs text-gray-400 mt-2 truncate">Halo, {session.full_name}</p>
                         </div>
@@ -433,7 +432,6 @@
                         </div>
                     </div>
 
-                    {/* Area Konten Utama */}
                     <div className="flex-1 flex flex-col h-screen overflow-hidden">
                         <header className="bg-white md:hidden p-4 border-b border-gray-200 flex justify-between items-center shadow-sm z-10">
                             <h1 className="text-lg font-bold text-blue-700 truncate max-w-[200px]">{hotelName}</h1>
@@ -446,7 +444,6 @@
                             {currentView === 'rooms' && <RoomsView tenantId={tenantId} showToast={showToast} />}
                         </main>
 
-                        {/* Bottom Nav Mobile */}
                         <nav className="md:hidden bg-white border-t border-gray-200 flex justify-around p-3 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                             {navItems.map(item => (
                                 <button key={item.id} onClick={() => setCurrentView(item.id)}
