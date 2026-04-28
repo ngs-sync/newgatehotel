@@ -46,7 +46,10 @@
             Logout: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>,
             Plus: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>,
             Close: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>,
-            Sparkles: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+            Sparkles: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>,
+            Settings: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>,
+            Trash: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>,
+            Edit: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
         };
 
         const Toast = ({ message, type, onClose }) => {
@@ -207,7 +210,7 @@
                                 )}
                                 {response && !loading && (
                                     <div className="text-gray-800 text-sm leading-relaxed ai-content" 
-                                         dangerouslySetInnerHTML={{ __html: response.replace(/\n/g, '<br/>') }} />
+                                         dangerouslySetInnerHTML={{ __html: response.replace(/\n/g, '<br/>') }}></div>
                                 )}
                             </div>
                             <form onSubmit={handleAskAI} className="flex gap-2">
@@ -400,7 +403,410 @@
         };
 
         // ==========================================
-        // 🏗️ 8. STRUKTUR UTAMA APLIKASI (APP)
+        // ⚙️ 8. HOTEL CONFIGURATION COMPONENT
+        // ==========================================
+        const RoomCategorySetting = ({ tenantId, showToast }) => {
+            const [categories, setCategories] = useState([]);
+            const [loading, setLoading] = useState(false);
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [editingItem, setEditingItem] = useState(null);
+            const [form, setForm] = useState({ name: '', bed_type: '', total_rooms: '' });
+
+            const fetchCategories = async () => {
+                const { data } = await supabase.from('room_categories').select('*').eq('tenant_id', tenantId).order('name');
+                if (data) setCategories(data);
+            };
+
+            useEffect(() => { fetchCategories(); }, []);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setLoading(true);
+                try {
+                    if (editingItem) {
+                        const { error } = await supabase.from('room_categories').update(form).eq('id', editingItem.id);
+                        if (error) throw error;
+                        showToast("Kategori berhasil diupdate");
+                    } else {
+                        const { error } = await supabase.from('room_categories').insert([{ ...form, tenant_id: tenantId }]);
+                        if (error) throw error;
+                        showToast("Kategori berhasil ditambah");
+                    }
+                    setIsModalOpen(false); setEditingItem(null); setForm({ name: '', bed_type: '', total_rooms: '' }); fetchCategories();
+                } catch (error) {
+                    showToast(error.message, "error");
+                } finally { setLoading(false); }
+            };
+
+            const handleDelete = async (id) => {
+                if (!confirm("Hapus kategori ini?")) return;
+                try {
+                    const { error } = await supabase.from('room_categories').delete().eq('id', id);
+                    if (error) throw error;
+                    showToast("Kategori dihapus");
+                    fetchCategories();
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
+            };
+
+            return (
+                <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                        <h3 className="text-lg font-semibold text-gray-700">Daftar Tipe Kamar</h3>
+                        <button onClick={() => { setEditingItem(null); setForm({ name: '', bed_type: '' }); setIsModalOpen(true); }} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                            <Icons.Plus /> Tambah Tipe
+                        </button>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-gray-50 border-b border-gray-100">
+                                    <th className="p-3 text-sm font-semibold text-gray-600">Nama Tipe</th>
+                                    <th className="p-3 text-sm font-semibold text-gray-600 text-center">Jml Kamar</th>
+                                    <th className="p-3 text-sm font-semibold text-gray-600">Tipe Tempat Tidur</th>
+                                    <th className="p-3 text-sm font-semibold text-gray-600 text-right">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {categories.map(cat => (
+                                    <tr key={cat.id} className="border-b border-gray-50 hover:bg-gray-50">
+                                        <td className="p-3 text-sm">{cat.name}</td>
+                                        <td className="p-3 text-sm text-center">{cat.total_rooms}</td>
+                                        <td className="p-3 text-sm">{cat.bed_type}</td>
+                                        <td className="p-3 text-sm text-right space-x-2">
+                                            <button onClick={() => { setEditingItem(cat); setForm({ name: cat.name, bed_type: cat.bed_type, total_rooms: cat.total_rooms }); setIsModalOpen(true); }} className="text-blue-600 hover:text-blue-800"><Icons.Edit /></button>
+                                            <button onClick={() => handleDelete(cat.id)} className="text-red-600 hover:text-red-800"><Icons.Trash /></button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    {isModalOpen && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+                                <div className="flex justify-between items-center p-5 border-b">
+                                    <h3 className="font-bold">{editingItem ? 'Edit' : 'Tambah'} Tipe Kamar</h3>
+                                    <button onClick={() => setIsModalOpen(false)}><Icons.Close /></button>
+                                </div>
+                                <form onSubmit={handleSubmit} className="p-5 space-y-4">
+                                    <div>
+                                        <label className="block text-xs text-gray-500 mb-1">Nama Tipe (e.g Deluxe)</label>
+                                        <input required className="w-full border p-2 rounded" value={form.name} onChange={e=>setForm({...form, name: e.target.value})} />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-xs text-gray-500 mb-1">Jumlah Kamar</label>
+                                            <input required type="number" className="w-full border p-2 rounded" value={form.total_rooms} onChange={e=>setForm({...form, total_rooms: e.target.value})} />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs text-gray-500 mb-1">Bed Type</label>
+                                            <input required className="w-full border p-2 rounded" value={form.bed_type} onChange={e=>setForm({...form, bed_type: e.target.value})} />
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-end gap-2 pt-2">
+                                        <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 border rounded">Batal</button>
+                                        <button type="submit" disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded">{loading ? 'Proses...' : 'Simpan'}</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const RoomNumberSetting = ({ tenantId, showToast }) => {
+            const [rooms, setRooms] = useState([]);
+            const [categories, setCategories] = useState([]);
+            const [loading, setLoading] = useState(false);
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [editingItem, setEditingItem] = useState(null);
+
+            // State untuk bulk creation
+            const [selectedCategoryId, setSelectedCategoryId] = useState('');
+            const [bulkRows, setBulkRows] = useState([{ room_number: '', floor: '', building: '', view: '' }]);
+
+            // State untuk single edit
+            const [editForm, setEditForm] = useState({ room_number: '', category_id: '', floor: '', building: '', view: '' });
+
+            const fetchData = async () => {
+                const [resRooms, resCats] = await Promise.all([
+                    supabase.from('rooms').select(`*, room_categories(name)`).eq('tenant_id', tenantId).order('room_number'),
+                    supabase.from('room_categories').select('*').eq('tenant_id', tenantId).order('name')
+                ]);
+                if (resRooms.data) setRooms(resRooms.data);
+                if (resCats.data) setCategories(resCats.data);
+            };
+
+            useEffect(() => { fetchData(); }, []);
+
+            const addBulkRow = () => {
+                setBulkRows([...bulkRows, { room_number: '', floor: '', building: '', view: '' }]);
+            };
+
+            const removeBulkRow = (index) => {
+                if (bulkRows.length === 1) return;
+                setBulkRows(bulkRows.filter((_, i) => i !== index));
+            };
+
+            const updateBulkRow = (index, field, value) => {
+                const newRows = [...bulkRows];
+                newRows[index][field] = value;
+                setBulkRows(newRows);
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setLoading(true);
+                try {
+                    if (editingItem) {
+                        const { error } = await supabase.from('rooms').update({ ...editForm, tenant_id: tenantId }).eq('id', editingItem.id);
+                        if (error) throw error;
+                        showToast("Nomor kamar diupdate");
+                    } else {
+                        if (!selectedCategoryId) throw new Error("Pilih Kategori Kamar terlebih dahulu");
+
+                        const payload = bulkRows
+                            .filter(row => row.room_number.trim() !== '')
+                            .map(row => ({
+                                ...row,
+                                tenant_id: tenantId,
+                                category_id: selectedCategoryId,
+                                status: 'available'
+                            }));
+
+                        if (payload.length === 0) throw new Error("Isi minimal satu nomor kamar");
+
+                        const { error } = await supabase.from('rooms').insert(payload);
+                        if (error) throw error;
+                        showToast(`${payload.length} Kamar berhasil ditambah`);
+                    }
+                    resetForms();
+                    fetchData();
+                } catch (error) {
+                    showToast(error.message, "error");
+                } finally { setLoading(false); }
+            };
+
+            const resetForms = () => {
+                setIsModalOpen(false);
+                setEditingItem(null);
+                setSelectedCategoryId('');
+                setBulkRows([{ room_number: '', floor: '', building: '', view: '' }]);
+                setEditForm({ room_number: '', category_id: '', floor: '', building: '', view: '' });
+            };
+
+            const handleDelete = async (id) => {
+                if (!confirm("Hapus nomor kamar ini?")) return;
+                try {
+                    const { error } = await supabase.from('rooms').delete().eq('id', id);
+                    if (error) throw error;
+                    showToast("Kamar dihapus");
+                    fetchData();
+                } catch (error) {
+                    showToast(error.message, "error");
+                }
+            };
+
+            return (
+                <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                        <h3 className="text-lg font-semibold text-gray-700">Daftar Nomor Kamar</h3>
+                        <button onClick={() => { setEditingItem(null); setIsModalOpen(true); }} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                            <Icons.Plus /> Tambah Kamar (Bulk)
+                        </button>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-gray-50 border-b border-gray-100">
+                                    <th className="p-3 text-sm font-semibold text-gray-600">No. Kamar</th>
+                                    <th className="p-3 text-sm font-semibold text-gray-600">Kategori</th>
+                                    <th className="p-3 text-sm font-semibold text-gray-600">Lantai</th>
+                                    <th className="p-3 text-sm font-semibold text-gray-600">Gedung</th>
+                                    <th className="p-3 text-sm font-semibold text-gray-600 text-right">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {rooms.map(room => (
+                                    <tr key={room.id} className="border-b border-gray-50 hover:bg-gray-50">
+                                        <td className="p-3 text-sm font-bold">{room.room_number}</td>
+                                        <td className="p-3 text-sm">{room.room_categories?.name}</td>
+                                        <td className="p-3 text-sm">{room.floor}</td>
+                                        <td className="p-3 text-sm">{room.building}</td>
+                                        <td className="p-3 text-sm text-right space-x-2">
+                                            <button onClick={() => {
+                                                setEditingItem(room);
+                                                setEditForm({ room_number: room.room_number, category_id: room.category_id, floor: room.floor, building: room.building, view: room.view });
+                                                setIsModalOpen(true);
+                                            }} className="text-blue-600 hover:text-blue-800"><Icons.Edit /></button>
+                                            <button onClick={() => handleDelete(room.id)} className="text-red-600 hover:text-red-800"><Icons.Trash /></button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    {isModalOpen && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+                                <div className="flex justify-between items-center p-5 border-b">
+                                    <h3 className="font-bold text-xl">{editingItem ? 'Edit' : 'Tambah Bulk'} Nomor Kamar</h3>
+                                    <button onClick={resetForms}><Icons.Close /></button>
+                                </div>
+
+                                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
+                                    {editingItem ? (
+                                        // FORM SINGLE EDIT
+                                        <div className="space-y-4 max-w-md mx-auto">
+                                            <div>
+                                                <label className="block text-xs text-gray-500 mb-1">Kategori Kamar *</label>
+                                                <select required className="w-full border p-2 rounded" value={editForm.category_id} onChange={e=>setEditForm({...editForm, category_id: e.target.value})}>
+                                                    <option value="">Pilih Kategori</option>
+                                                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                                </select>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="block text-xs text-gray-500 mb-1">No. Kamar *</label>
+                                                    <input required className="w-full border p-2 rounded" value={editForm.room_number} onChange={e=>setEditForm({...editForm, room_number: e.target.value})} />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs text-gray-500 mb-1">Lantai</label>
+                                                    <input className="w-full border p-2 rounded" value={editForm.floor} onChange={e=>setEditForm({...editForm, floor: e.target.value})} />
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="block text-xs text-gray-500 mb-1">Gedung</label>
+                                                    <input className="w-full border p-2 rounded" value={editForm.building} onChange={e=>setEditForm({...editForm, building: e.target.value})} />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs text-gray-500 mb-1">View</label>
+                                                    <input className="w-full border p-2 rounded" value={editForm.view} onChange={e=>setEditForm({...editForm, view: e.target.value})} />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        // FORM BULK ADD
+                                        <div className="space-y-6">
+                                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 max-w-sm">
+                                                <label className="block text-sm font-bold text-blue-800 mb-2">Pilih Kategori Kamar *</label>
+                                                <select required className="w-full border border-blue-200 p-2 rounded-lg" value={selectedCategoryId} onChange={e=>setSelectedCategoryId(e.target.value)}>
+                                                    <option value="">-- Pilih Tipe --</option>
+                                                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                                </select>
+                                            </div>
+
+                                            <div className="space-y-3">
+                                                <div className="grid grid-cols-12 gap-3 px-2 text-xs font-bold text-gray-500 uppercase">
+                                                    <div className="col-span-3">No. Kamar *</div>
+                                                    <div className="col-span-2">Lantai</div>
+                                                    <div className="col-span-3">Gedung</div>
+                                                    <div className="col-span-3">View</div>
+                                                    <div className="col-span-1"></div>
+                                                </div>
+
+                                                {bulkRows.map((row, index) => (
+                                                    <div key={index} className="grid grid-cols-12 gap-3 items-center bg-gray-50 p-2 rounded-lg border border-gray-100 group">
+                                                        <div className="col-span-3">
+                                                            <input required placeholder="Cth: 101" className="w-full border p-2 rounded shadow-sm focus:ring-2 focus:ring-blue-400 outline-none" value={row.room_number} onChange={e=>updateBulkRow(index, 'room_number', e.target.value)} />
+                                                        </div>
+                                                        <div className="col-span-2">
+                                                            <input placeholder="Lantai" className="w-full border p-2 rounded shadow-sm" value={row.floor} onChange={e=>updateBulkRow(index, 'floor', e.target.value)} />
+                                                        </div>
+                                                        <div className="col-span-3">
+                                                            <input placeholder="Gedung" className="w-full border p-2 rounded shadow-sm" value={row.building} onChange={e=>updateBulkRow(index, 'building', e.target.value)} />
+                                                        </div>
+                                                        <div className="col-span-3">
+                                                            <input placeholder="View" className="w-full border p-2 rounded shadow-sm" value={row.view} onChange={e=>updateBulkRow(index, 'view', e.target.value)} />
+                                                        </div>
+                                                        <div className="col-span-1 text-center">
+                                                            {bulkRows.length > 1 && (
+                                                                <button type="button" onClick={() => removeBulkRow(index)} className="text-red-400 hover:text-red-600 transition-colors">
+                                                                    <Icons.Close />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))}
+
+                                                <button type="button" onClick={addBulkRow} className="w-full py-3 border-2 border-dashed border-blue-200 text-blue-500 rounded-lg hover:bg-blue-50 hover:border-blue-400 transition-all font-medium flex items-center justify-center gap-2">
+                                                    <Icons.Plus /> Tambah Baris Kamar
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="flex justify-end gap-3 pt-6 border-t mt-auto">
+                                        <button type="button" onClick={resetForms} className="px-6 py-2.5 border rounded-xl font-medium text-gray-600 hover:bg-gray-50">Batal</button>
+                                        <button type="submit" disabled={loading} className="px-8 py-2.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 disabled:bg-blue-300">
+                                            {loading ? 'Menyimpan...' : (editingItem ? 'Simpan Perubahan' : `Simpan ${bulkRows.filter(r=>r.room_number).length} Kamar`)}
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const HotelConfigView = ({ session, showToast }) => {
+            const [activeTab, setActiveTab] = useState('room_category');
+            const tenantId = session.tenant_id;
+
+            const tabs = [
+                { id: 'room_category', label: 'Room Category' },
+                { id: 'room_number', label: 'Room Number' },
+                { id: 'rate_structure', label: 'Rate Structure' },
+                { id: 'user_config', label: 'User Config' },
+                { id: 'segmentation', label: 'Segmentation' },
+                { id: 'article_sale', label: 'Article Sale' },
+                { id: 'article_payment', label: 'Article Payment' },
+                { id: 'tax_service', label: 'Tax & Service' },
+            ];
+
+            return (
+                <div className="space-y-6">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-blue-100 p-2 rounded-lg text-blue-700"><Icons.Settings /></div>
+                        <h2 className="text-2xl font-bold text-gray-800">Hotel Configuration</h2>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                        <div className="flex border-b border-gray-100 overflow-x-auto hide-scroll">
+                            {tabs.map(tab => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${activeTab === tab.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}
+                                >
+                                    {tab.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="p-6">
+                            {activeTab === 'room_category' && <RoomCategorySetting tenantId={tenantId} showToast={showToast} />}
+                            {activeTab === 'room_number' && <RoomNumberSetting tenantId={tenantId} showToast={showToast} />}
+                            {['rate_structure', 'user_config', 'segmentation', 'article_sale', 'article_payment', 'tax_service'].includes(activeTab) && (
+                                <div className="py-20 text-center">
+                                    <div className="bg-yellow-50 text-yellow-700 px-4 py-3 rounded-lg inline-block border border-yellow-100">
+                                        Fitur <strong>{tabs.find(t => t.id === activeTab).label}</strong> sedang dalam pengembangan.
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // ==========================================
+        // 🏗️ 9. STRUKTUR UTAMA APLIKASI (APP)
         // ==========================================
         const App = () => {
             const [session, setSession] = useState(null);
@@ -443,6 +849,10 @@
                 { id: 'ai_assistant', label: 'AI Assistant', icon: <Icons.Sparkles /> },
             ];
 
+            if (session.role === 'hotel_admin') {
+                navItems.push({ id: 'hotel_config', label: 'Hotel Configuration', icon: <Icons.Settings /> });
+            }
+
             return (
                 <div className="flex h-screen bg-gray-100 font-sans">
                     <div className="hidden md:flex flex-col w-64 bg-white border-r border-gray-200 shadow-sm">
@@ -477,6 +887,7 @@
                             {currentView === 'reservations' && <ReservationsView tenantId={tenantId} showToast={showToast} />}
                             {currentView === 'rooms' && <RoomsView tenantId={tenantId} showToast={showToast} />}
                             {currentView === 'ai_assistant' && <AIAssistantView showToast={showToast} />}
+                            {currentView === 'hotel_config' && <HotelConfigView session={session} showToast={showToast} />}
                         </main>
 
                         <nav className="md:hidden bg-white border-t border-gray-200 flex justify-around p-3 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
