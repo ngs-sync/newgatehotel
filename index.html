@@ -405,6 +405,57 @@
         // ==========================================
         // ⚙️ 8. HOTEL CONFIGURATION COMPONENT
         // ==========================================
+        const HotelConfigView = ({ session, showToast }) => {
+            const [activeTab, setActiveTab] = useState('room_category');
+            const tenantId = session.tenant_id;
+
+            const tabs = [
+                { id: 'room_category', label: 'Room Category' },
+                { id: 'room_number', label: 'Room Number' },
+                { id: 'rate_structure', label: 'Rate Structure' },
+                { id: 'user_config', label: 'User Config' },
+                { id: 'segmentation', label: 'Segmentation' },
+                { id: 'article_sale', label: 'Article Sale' },
+                { id: 'article_payment', label: 'Article Payment' },
+                { id: 'tax_service', label: 'Tax & Service' },
+            ];
+
+            return (
+                <div className="space-y-6">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-blue-100 p-2 rounded-lg text-blue-700"><Icons.Settings /></div>
+                        <h2 className="text-2xl font-bold text-gray-800">Hotel Configuration</h2>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                        <div className="flex border-b border-gray-100 overflow-x-auto hide-scroll">
+                            {tabs.map(tab => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${activeTab === tab.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}
+                                >
+                                    {tab.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="p-6">
+                            {activeTab === 'room_category' && <RoomCategorySetting tenantId={tenantId} showToast={showToast} />}
+                            {activeTab === 'room_number' && <RoomNumberSetting tenantId={tenantId} showToast={showToast} />}
+                            {['rate_structure', 'user_config', 'segmentation', 'article_sale', 'article_payment', 'tax_service'].includes(activeTab) && (
+                                <div className="py-20 text-center">
+                                    <div className="bg-yellow-50 text-yellow-700 px-4 py-3 rounded-lg inline-block border border-yellow-100">
+                                        Fitur <strong>{tabs.find(t => t.id === activeTab).label}</strong> sedang dalam pengembangan.
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
         const RoomCategorySetting = ({ tenantId, showToast }) => {
             const [categories, setCategories] = useState([]);
             const [loading, setLoading] = useState(false);
@@ -530,6 +581,7 @@
 
             // State untuk single edit
             const [editForm, setEditForm] = useState({ room_number: '', category_id: '', floor: '', building: '', view: '' });
+            const [form, setForm] = useState({ room_number: '', category_id: '', floor: '', building: '', view: '' });
 
             const fetchData = async () => {
                 const [resRooms, resCats] = await Promise.all([
@@ -585,6 +637,17 @@
                     }
                     resetForms();
                     fetchData();
+                    const payload = { ...form, tenant_id: tenantId };
+                    if (editingItem) {
+                        const { error } = await supabase.from('rooms').update(payload).eq('id', editingItem.id);
+                        if (error) throw error;
+                        showToast("Nomor kamar diupdate");
+                    } else {
+                        const { error } = await supabase.from('rooms').insert([{ ...payload, status: 'available' }]);
+                        if (error) throw error;
+                        showToast("Nomor kamar ditambah");
+                    }
+                    setIsModalOpen(false); setEditingItem(null); setForm({ room_number: '', category_id: '', floor: '', building: '', view: '' }); fetchData();
                 } catch (error) {
                     showToast(error.message, "error");
                 } finally { setLoading(false); }
@@ -616,6 +679,8 @@
                         <h3 className="text-lg font-semibold text-gray-700">Daftar Nomor Kamar</h3>
                         <button onClick={() => { setEditingItem(null); setIsModalOpen(true); }} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
                             <Icons.Plus /> Tambah Kamar (Bulk)
+                        <button onClick={() => { setEditingItem(null); setForm({ room_number: '', category_id: '', floor: '', building: '', view: '' }); setIsModalOpen(true); }} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                            <Icons.Plus /> Tambah Kamar
                         </button>
                     </div>
                     <div className="overflow-x-auto">
@@ -642,6 +707,7 @@
                                                 setEditForm({ room_number: room.room_number, category_id: room.category_id, floor: room.floor, building: room.building, view: room.view });
                                                 setIsModalOpen(true);
                                             }} className="text-blue-600 hover:text-blue-800"><Icons.Edit /></button>
+                                            <button onClick={() => { setEditingItem(room); setForm({ room_number: room.room_number, category_id: room.category_id, floor: room.floor, building: room.building, view: room.view }); setIsModalOpen(true); }} className="text-blue-600 hover:text-blue-800"><Icons.Edit /></button>
                                             <button onClick={() => handleDelete(room.id)} className="text-red-600 hover:text-red-800"><Icons.Trash /></button>
                                         </td>
                                     </tr>
@@ -745,6 +811,42 @@
                                         <button type="submit" disabled={loading} className="px-8 py-2.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 disabled:bg-blue-300">
                                             {loading ? 'Menyimpan...' : (editingItem ? 'Simpan Perubahan' : `Simpan ${bulkRows.filter(r=>r.room_number).length} Kamar`)}
                                         </button>
+                            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+                                <div className="flex justify-between items-center p-5 border-b">
+                                    <h3 className="font-bold">{editingItem ? 'Edit' : 'Tambah'} Nomor Kamar</h3>
+                                    <button onClick={() => setIsModalOpen(false)}><Icons.Close /></button>
+                                </div>
+                                <form onSubmit={handleSubmit} className="p-5 space-y-3">
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-xs text-gray-500 mb-1">No. Kamar *</label>
+                                            <input required className="w-full border p-2 rounded" value={form.room_number} onChange={e=>setForm({...form, room_number: e.target.value})} />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs text-gray-500 mb-1">Kategori Kamar *</label>
+                                            <select required className="w-full border p-2 rounded" value={form.category_id} onChange={e=>setForm({...form, category_id: e.target.value})}>
+                                                <option value="">Pilih Kategori</option>
+                                                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block text-xs text-gray-500 mb-1">Lantai</label>
+                                            <input className="w-full border p-2 rounded" value={form.floor} onChange={e=>setForm({...form, floor: e.target.value})} />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs text-gray-500 mb-1">Gedung</label>
+                                            <input className="w-full border p-2 rounded" value={form.building} onChange={e=>setForm({...form, building: e.target.value})} />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs text-gray-500 mb-1">View (Pemandangan)</label>
+                                        <input className="w-full border p-2 rounded" value={form.view} onChange={e=>setForm({...form, view: e.target.value})} />
+                                    </div>
+                                    <div className="flex justify-end gap-2 pt-2">
+                                        <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 border rounded">Batal</button>
+                                        <button type="submit" disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded">{loading ? 'Proses...' : 'Simpan'}</button>
                                     </div>
                                 </form>
                             </div>
