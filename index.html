@@ -15,6 +15,9 @@
         body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
         .hide-scroll::-webkit-scrollbar { display: none; }
         .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+        /* Style untuk format output AI */
+        .ai-content p { margin-bottom: 0.75rem; }
+        .ai-content ul { list-style-type: disc; margin-left: 1.5rem; margin-bottom: 0.75rem; }
     </style>
 </head>
 <body>
@@ -22,10 +25,11 @@
 
     <script type="text/babel">
         // ==========================================
-        // 🛠️ 1. SETUP SUPABASE
+        // 🛠️ 1. SETUP SUPABASE & GEMINI API
         // ==========================================
-        const SUPABASE_URL = 'https://wzammfnzptusiicwdaut.supabase.co';
+        const SUPABASE_URL = 'https://wzammfnzptusiicwdaut.supabase.co>>';
         const SUPABASE_ANON_KEY = 'sb_publishable_Jk23sVPoYwengKLIjL78ww_Az4d7Tl-';
+        const GEMINI_API_KEY = 'AIzaSyA92TBUTDqARe9mcVI7uTChuRGYe6vK9RY'; // Masukkan API Key Gemini Kamu Di Sini
         
         const isConfigured = SUPABASE_URL.startsWith('http');
         const supabase = isConfigured ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
@@ -41,7 +45,8 @@
             Bed: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>,
             Logout: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>,
             Plus: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>,
-            Close: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            Close: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>,
+            Sparkles: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
         };
 
         const Toast = ({ message, type, onClose }) => {
@@ -59,7 +64,7 @@
         };
 
         // ==========================================
-        // 🔐 3. HALAMAN LOGIN KLIEN (Cek manual ke tabel profiles)
+        // 🔐 3. HALAMAN LOGIN KLIEN
         // ==========================================
         const LoginScreen = ({ onLoginSuccess, showToast }) => {
             const [loading, setLoading] = useState(false);
@@ -69,26 +74,21 @@
                 e.preventDefault();
                 setLoading(true);
                 try {
-                    // MENGGUNAKAN maybeSingle() UNTUK MENCEGAH ERROR 406
+                    // MENGGUNAKAN maybeSingle() UNTUK MENCEGAH ERROR 406 JIKA KOSONG
                     const { data, error } = await supabase
                         .from('profiles')
-                        .select('*')
+                        .select('*, tenants(name)')
                         .eq('tenant_id', formData.tenant_id.toUpperCase())
                         .eq('email', formData.email)
                         .eq('password', formData.password)
                         .maybeSingle();
 
                     if (error) {
-                        console.error("Supabase Error:", error);
-                        throw new Error("Terjadi kesalahan database. Pastikan SQL Opsi C sudah di-run.");
+                        throw new Error("Terjadi kesalahan database. Pastikan SQL Bypass RLS sudah dijalankan.");
                     }
 
                     if (!data) {
                         throw new Error("Login gagal. Kode Hotel, Email, atau Password salah.");
-                    }
-
-                    if (!data.is_active) {
-                        throw new Error("Akun Anda sedang dinonaktifkan.");
                     }
 
                     showToast(`Selamat datang, ${data.full_name}!`, "success");
@@ -137,7 +137,100 @@
         };
 
         // ==========================================
-        // 📊 4. DASHBOARD COMPONENT (Filter by Tenant)
+        // 🤖 4. AI ASSISTANT COMPONENT (GEMINI API)
+        // ==========================================
+        const AIAssistantView = ({ showToast }) => {
+            const [prompt, setPrompt] = useState('');
+            const [response, setResponse] = useState('');
+            const [loading, setLoading] = useState(false);
+
+            const handleAskAI = async (e) => {
+                e.preventDefault();
+                if (!GEMINI_API_KEY || GEMINI_API_KEY.includes('<<GANTI_DI_SINI')) {
+                    showToast("API Key Gemini belum diatur di dalam kode!", "error");
+                    return;
+                }
+
+                setLoading(true);
+                try {
+                    // Konteks prompt agar Gemini bertindak sebagai pakar perhotelan
+                    const systemPrompt = "Anda adalah AI Assistant cerdas untuk sistem Hotel Property Management System (PMS). Tugas Anda membantu resepsionis atau manajer hotel menyusun email, membalas komplain tamu, atau memberikan panduan operasional. Jawablah secara profesional dan ringkas. Pertanyaan dari staf hotel: " + prompt;
+
+                    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: systemPrompt }] }]
+                        })
+                    });
+
+                    const data = await res.json();
+                    
+                    if (data.error) {
+                        throw new Error(data.error.message);
+                    }
+
+                    // Ambil teks dari response Gemini API
+                    const aiText = data.candidates[0].content.parts[0].text;
+                    // Format newline sederhana ke HTML br
+                    setResponse(aiText);
+                    setPrompt('');
+
+                } catch (error) {
+                    showToast(`Error AI: ${error.message}`, "error");
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="space-y-6 max-w-4xl">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-purple-100 p-2 rounded-lg text-purple-700"><Icons.Sparkles /></div>
+                        <h2 className="text-2xl font-bold text-gray-800">Hotel AI Assistant</h2>
+                    </div>
+                    <p className="text-gray-600">Didukung oleh Google Gemini LLM. Minta AI untuk membantu membuat draf email tamu, menerjemahkan bahasa, atau memberikan ide penanganan komplain.</p>
+                    
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col md:flex-row h-[60vh]">
+                        {/* Area Chat */}
+                        <div className="flex-1 p-6 flex flex-col border-r border-gray-100">
+                            <div className="flex-1 overflow-y-auto mb-4 bg-gray-50 rounded-xl p-4 border border-gray-100">
+                                {!response && !loading && (
+                                    <div className="h-full flex items-center justify-center text-gray-400 text-sm text-center">
+                                        Halo! Saya asisten AI Hotel Anda.<br/>Ketik permintaan Anda di bawah ini.
+                                    </div>
+                                )}
+                                {loading && (
+                                    <div className="flex items-center justify-center text-purple-600 h-full font-medium">
+                                        <Icons.Sparkles className="animate-spin mr-2" /> Gemini sedang berpikir...
+                                    </div>
+                                )}
+                                {response && !loading && (
+                                    <div className="text-gray-800 text-sm leading-relaxed ai-content" 
+                                         dangerouslySetInnerHTML={{ __html: response.replace(/\n/g, '<br/>') }} />
+                                )}
+                            </div>
+                            <form onSubmit={handleAskAI} className="flex gap-2">
+                                <input 
+                                    type="text" 
+                                    className="flex-1 border p-3 rounded-lg focus:ring-2 focus:ring-purple-300 focus:border-purple-500" 
+                                    placeholder="Cth: Buatkan draf email sopan untuk tamu yang telat check-out..." 
+                                    value={prompt} 
+                                    onChange={(e) => setPrompt(e.target.value)} 
+                                    required 
+                                />
+                                <button type="submit" disabled={loading} className="bg-purple-600 hover:bg-purple-700 text-white px-6 font-bold py-3 rounded-lg transition-colors flex items-center gap-2">
+                                    Tanya AI
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // ==========================================
+        // 📊 5. DASHBOARD COMPONENT
         // ==========================================
         const Dashboard = ({ tenantId, showToast }) => {
             const [stats, setStats] = useState({ rooms: 0, reservations: 0, revenue: 0 });
@@ -151,17 +244,11 @@
                         ]);
                         
                         let totalRev = 0;
-                        if(resBookings.data) {
-                            totalRev = resBookings.data.reduce((sum, b) => sum + (Number(b.total_amount) || 0), 0);
-                        }
-
-                        setStats({
-                            rooms: resRooms.count || 0,
-                            reservations: resBookings.data?.length || 0,
-                            revenue: totalRev
-                        });
+                        if(resBookings.data) totalRev = resBookings.data.reduce((sum, b) => sum + (Number(b.total_amount) || 0), 0);
+                        
+                        setStats({ rooms: resRooms.count || 0, reservations: resBookings.data?.length || 0, revenue: totalRev });
                     } catch (error) {
-                        showToast("Gagal memuat statistik", "error");
+                        // Silent error untuk dashboard agar tidak spam toast
                     }
                 };
                 if(tenantId) fetchStats();
@@ -172,16 +259,13 @@
                     <h2 className="text-2xl font-bold text-gray-800">Ringkasan Hari Ini</h2>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 border-l-4 border-l-blue-500">
-                            <p className="text-gray-500 text-sm">Total Kamar</p>
-                            <p className="text-3xl font-bold text-gray-800">{stats.rooms}</p>
+                            <p className="text-gray-500 text-sm">Total Kamar</p><p className="text-3xl font-bold text-gray-800">{stats.rooms}</p>
                         </div>
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 border-l-4 border-l-green-500">
-                            <p className="text-gray-500 text-sm">Reservasi Terdaftar</p>
-                            <p className="text-3xl font-bold text-gray-800">{stats.reservations}</p>
+                            <p className="text-gray-500 text-sm">Reservasi Terdaftar</p><p className="text-3xl font-bold text-gray-800">{stats.reservations}</p>
                         </div>
                         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 border-l-4 border-l-purple-500">
-                            <p className="text-gray-500 text-sm">Estimasi Pendapatan</p>
-                            <p className="text-3xl font-bold text-gray-800">Rp {stats.revenue.toLocaleString('id-ID')}</p>
+                            <p className="text-gray-500 text-sm">Estimasi Pendapatan</p><p className="text-3xl font-bold text-gray-800">Rp {stats.revenue.toLocaleString('id-ID')}</p>
                         </div>
                     </div>
                 </div>
@@ -189,20 +273,14 @@
         };
 
         // ==========================================
-        // 🛏️ 5. HOUSEKEEPING / ROOMS COMPONENT
+        // 🛏️ 6. HOUSEKEEPING / ROOMS COMPONENT
         // ==========================================
         const RoomsView = ({ tenantId, showToast }) => {
             const [rooms, setRooms] = useState([]);
-
             useEffect(() => {
                 const fetchRooms = async () => {
-                    const { data, error } = await supabase
-                        .from('rooms')
-                        .select(`*, room_types(name)`)
-                        .eq('tenant_id', tenantId)
-                        .order('room_number');
+                    const { data } = await supabase.from('rooms').select(`*, room_types(name)`).eq('tenant_id', tenantId).order('room_number');
                     if (data) setRooms(data);
-                    if (error) showToast("Gagal memuat kamar", "error");
                 };
                 if(tenantId) fetchRooms();
             }, [tenantId]);
@@ -212,7 +290,6 @@
                     case 'available': return 'bg-green-100 text-green-800';
                     case 'occupied': return 'bg-red-100 text-red-800';
                     case 'dirty': return 'bg-yellow-100 text-yellow-800';
-                    case 'maintenance': return 'bg-gray-100 text-gray-800';
                     default: return 'bg-gray-100 text-gray-800';
                 }
             };
@@ -225,9 +302,7 @@
                             <div key={room.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 text-center flex flex-col items-center justify-center h-32 hover:shadow-md transition">
                                 <span className="text-2xl font-bold text-gray-800">{room.room_number}</span>
                                 <span className="text-xs text-gray-500 mt-1">{room.room_types?.name}</span>
-                                <span className={`mt-2 px-3 py-1 rounded-full text-xs font-semibold uppercase ${getStatusColor(room.status)}`}>
-                                    {room.status}
-                                </span>
+                                <span className={`mt-2 px-3 py-1 rounded-full text-xs font-semibold uppercase ${getStatusColor(room.status)}`}>{room.status}</span>
                             </div>
                         ))}
                     </div>
@@ -236,17 +311,13 @@
         };
 
         // ==========================================
-        // 📝 6. RESERVASI COMPONENT
+        // 📝 7. RESERVASI COMPONENT
         // ==========================================
         const ReservationsView = ({ tenantId, showToast }) => {
             const [reservations, setReservations] = useState([]);
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [loading, setLoading] = useState(false);
-            const [form, setForm] = useState({
-                guest_name: '', phone: '', email: '', 
-                check_in: '', check_out: '', 
-                adult_count: 1, child_count: 0, segment: 'leisure', total_amount: 0
-            });
+            const [form, setForm] = useState({ guest_name: '', check_in: '', check_out: '', total_amount: 0 });
 
             const fetchRes = async () => {
                 const { data } = await supabase.from('reservations').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false });
@@ -260,24 +331,12 @@
                 setLoading(true);
                 try {
                     const { error } = await supabase.from('reservations').insert([{
-                        tenant_id: tenantId, 
-                        reservation_number: 'RES-' + Math.floor(Math.random() * 100000),
-                        guest_name: form.guest_name,
-                        phone: form.phone,
-                        email: form.email,
-                        check_in: form.check_in,
-                        check_out: form.check_out,
-                        adult_count: form.adult_count,
-                        segment: form.segment,
-                        total_amount: form.total_amount,
-                        status: 'confirmed'
+                        tenant_id: tenantId, reservation_number: 'RES-' + Math.floor(Math.random() * 100000),
+                        guest_name: form.guest_name, check_in: form.check_in, check_out: form.check_out, total_amount: form.total_amount, status: 'confirmed'
                     }]);
-
                     if (error) throw error;
-                    
                     showToast("Reservasi berhasil dibuat!", "success");
-                    setIsModalOpen(false);
-                    fetchRes(); 
+                    setIsModalOpen(false); fetchRes(); 
                 } catch (error) {
                     showToast(error.message, "error");
                 } finally {
@@ -288,12 +347,9 @@
             return (
                 <div className="space-y-6">
                     <div className="flex justify-between items-center">
-                        <h2 className="text-2xl font-bold text-gray-800">Daftar Reservasi & Check-in</h2>
-                        <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2">
-                            <Icons.Plus /> Buat Reservasi Baru
-                        </button>
+                        <h2 className="text-2xl font-bold text-gray-800">Daftar Reservasi</h2>
+                        <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2"><Icons.Plus /> Reservasi Baru</button>
                     </div>
-
                     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                         <table className="w-full text-left border-collapse">
                             <thead>
@@ -301,7 +357,6 @@
                                     <th className="p-4 text-sm font-semibold text-gray-600">No. Res</th>
                                     <th className="p-4 text-sm font-semibold text-gray-600">Nama Tamu</th>
                                     <th className="p-4 text-sm font-semibold text-gray-600">Cek-in</th>
-                                    <th className="p-4 text-sm font-semibold text-gray-600">Cek-out</th>
                                     <th className="p-4 text-sm font-semibold text-gray-600">Status</th>
                                 </tr>
                             </thead>
@@ -311,12 +366,7 @@
                                         <td className="p-4 font-mono text-sm">{res.reservation_number}</td>
                                         <td className="p-4 font-medium">{res.guest_name}</td>
                                         <td className="p-4 text-gray-600">{res.check_in}</td>
-                                        <td className="p-4 text-gray-600">{res.check_out}</td>
-                                        <td className="p-4">
-                                            <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full uppercase font-semibold">
-                                                {res.status}
-                                            </span>
-                                        </td>
+                                        <td className="p-4"><span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full uppercase font-semibold">{res.status}</span></td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -325,36 +375,22 @@
 
                     {isModalOpen && (
                         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+                            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col">
                                 <div className="flex justify-between items-center p-6 border-b border-gray-100">
-                                    <h3 className="text-xl font-bold text-gray-800">Form Front Office - Reservasi Baru</h3>
+                                    <h3 className="text-xl font-bold text-gray-800">Reservasi Baru</h3>
                                     <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600"><Icons.Close /></button>
                                 </div>
-                                <div className="p-6 overflow-y-auto flex-1">
-                                    <form id="resForm" onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <div className="space-y-4">
-                                            <h4 className="font-semibold text-gray-700 border-b pb-2">Informasi Tamu</h4>
-                                            <div><label className="block text-xs text-gray-500 mb-1">Nama Tamu *</label><input required className="w-full border p-2 rounded" type="text" onChange={e=>setForm({...form, guest_name: e.target.value})} /></div>
-                                            <div><label className="block text-xs text-gray-500 mb-1">Nomor Telepon</label><input className="w-full border p-2 rounded" type="text" onChange={e=>setForm({...form, phone: e.target.value})} /></div>
-                                            <div><label className="block text-xs text-gray-500 mb-1">Email</label><input className="w-full border p-2 rounded" type="email" onChange={e=>setForm({...form, email: e.target.value})} /></div>
-                                            <div className="flex gap-4">
-                                                <div className="flex-1"><label className="block text-xs text-gray-500 mb-1">Dewasa</label><input type="number" min="1" className="w-full border p-2 rounded" value={form.adult_count} onChange={e=>setForm({...form, adult_count: e.target.value})} /></div>
-                                                <div className="flex-1"><label className="block text-xs text-gray-500 mb-1">Anak</label><input type="number" min="0" className="w-full border p-2 rounded" value={form.child_count} onChange={e=>setForm({...form, child_count: e.target.value})} /></div>
-                                            </div>
-                                        </div>
-                                        <div className="space-y-4">
-                                            <h4 className="font-semibold text-gray-700 border-b pb-2">Detail Kamar & Tanggal</h4>
-                                            <div><label className="block text-xs text-gray-500 mb-1">Tanggal Check-In *</label><input required className="w-full border p-2 rounded" type="date" onChange={e=>setForm({...form, check_in: e.target.value})} /></div>
-                                            <div><label className="block text-xs text-gray-500 mb-1">Tanggal Check-Out *</label><input required className="w-full border p-2 rounded" type="date" onChange={e=>setForm({...form, check_out: e.target.value})} /></div>
-                                            <div><label className="block text-xs text-gray-500 mb-1">Total Harga (Rp)</label><input className="w-full border p-2 rounded" type="number" onChange={e=>setForm({...form, total_amount: e.target.value})} /></div>
-                                        </div>
+                                <div className="p-6">
+                                    <form id="resForm" onSubmit={handleSubmit} className="space-y-4">
+                                        <div><label className="block text-xs text-gray-500 mb-1">Nama Tamu *</label><input required className="w-full border p-2 rounded" type="text" onChange={e=>setForm({...form, guest_name: e.target.value})} /></div>
+                                        <div><label className="block text-xs text-gray-500 mb-1">Tanggal Check-In *</label><input required className="w-full border p-2 rounded" type="date" onChange={e=>setForm({...form, check_in: e.target.value})} /></div>
+                                        <div><label className="block text-xs text-gray-500 mb-1">Tanggal Check-Out *</label><input required className="w-full border p-2 rounded" type="date" onChange={e=>setForm({...form, check_out: e.target.value})} /></div>
+                                        <div><label className="block text-xs text-gray-500 mb-1">Total Harga (Rp)</label><input className="w-full border p-2 rounded" type="number" onChange={e=>setForm({...form, total_amount: e.target.value})} /></div>
                                     </form>
                                 </div>
                                 <div className="p-6 border-t border-gray-100 flex justify-end gap-3 bg-gray-50 rounded-b-2xl">
                                     <button onClick={() => setIsModalOpen(false)} type="button" className="px-5 py-2 text-gray-600 bg-white border rounded-lg hover:bg-gray-100">Batal</button>
-                                    <button form="resForm" type="submit" disabled={loading} className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
-                                        Simpan Reservasi
-                                    </button>
+                                    <button form="resForm" type="submit" disabled={loading} className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">Simpan</button>
                                 </div>
                             </div>
                         </div>
@@ -364,7 +400,7 @@
         };
 
         // ==========================================
-        // 🏗️ 7. STRUKTUR UTAMA APLIKASI (APP)
+        // 🏗️ 8. STRUKTUR UTAMA APLIKASI (APP)
         // ==========================================
         const App = () => {
             const [session, setSession] = useState(null);
@@ -375,9 +411,7 @@
 
             useEffect(() => {
                 const savedSession = localStorage.getItem('hotel_session');
-                if (savedSession) {
-                    setSession(JSON.parse(savedSession));
-                }
+                if (savedSession) setSession(JSON.parse(savedSession));
             }, []);
 
             const handleLogout = () => {
@@ -390,37 +424,37 @@
                     <div className="min-h-screen flex items-center justify-center bg-gray-100">
                         <div className="bg-white p-8 rounded-xl text-center border-t-4 border-yellow-500">
                             <h1 className="text-xl font-bold">Setup Diperlukan</h1>
-                            <p className="text-gray-500">Masukkan URL dan API Key Supabase di index.html.</p>
+                            <p className="text-gray-500">Masukkan URL dan API Key Supabase.</p>
                         </div>
                     </div>
                 );
             }
 
-            if (!session) {
-                return <LoginScreen onLoginSuccess={setSession} showToast={showToast} />;
-            }
+            if (!session) return <LoginScreen onLoginSuccess={setSession} showToast={showToast} />;
 
             const tenantId = session.tenant_id;
-            const hotelName = tenantId || 'Hotel Saya'; // Disederhanakan untuk mencegah error join table
+            const hotelName = session.tenants?.name || tenantId;
 
+            // Navigasi dengan tambahan Menu AI
             const navItems = [
                 { id: 'dashboard', label: 'Dashboard', icon: <Icons.Home /> },
                 { id: 'reservations', label: 'Front Office', icon: <Icons.Book /> },
                 { id: 'rooms', label: 'Housekeeping', icon: <Icons.Bed /> },
+                { id: 'ai_assistant', label: 'AI Assistant', icon: <Icons.Sparkles /> },
             ];
 
             return (
                 <div className="flex h-screen bg-gray-100 font-sans">
                     <div className="hidden md:flex flex-col w-64 bg-white border-r border-gray-200 shadow-sm">
                         <div className="p-6 border-b border-gray-100">
-                            <h1 className="text-xl font-bold text-blue-700 truncate">SaaS PMS</h1>
+                            <h1 className="text-xl font-bold text-blue-700 truncate">{hotelName}</h1>
                             <p className="text-xs text-gray-500 mt-1 uppercase font-semibold">[{tenantId}]</p>
                             <p className="text-xs text-gray-400 mt-2 truncate">Halo, {session.full_name}</p>
                         </div>
                         <nav className="flex-1 p-4 space-y-2">
                             {navItems.map(item => (
                                 <button key={item.id} onClick={() => setCurrentView(item.id)}
-                                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${currentView === item.id ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-600 hover:bg-gray-50'}`}>
+                                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${currentView === item.id ? (item.id === 'ai_assistant' ? 'bg-purple-50 text-purple-700 font-semibold' : 'bg-blue-50 text-blue-700 font-semibold') : 'text-gray-600 hover:bg-gray-50'}`}>
                                     {item.icon} {item.label}
                                 </button>
                             ))}
@@ -442,12 +476,13 @@
                             {currentView === 'dashboard' && <Dashboard tenantId={tenantId} showToast={showToast} />}
                             {currentView === 'reservations' && <ReservationsView tenantId={tenantId} showToast={showToast} />}
                             {currentView === 'rooms' && <RoomsView tenantId={tenantId} showToast={showToast} />}
+                            {currentView === 'ai_assistant' && <AIAssistantView showToast={showToast} />}
                         </main>
 
                         <nav className="md:hidden bg-white border-t border-gray-200 flex justify-around p-3 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                             {navItems.map(item => (
                                 <button key={item.id} onClick={() => setCurrentView(item.id)}
-                                    className={`flex flex-col items-center p-2 rounded-lg ${currentView === item.id ? 'text-blue-600' : 'text-gray-500'}`}>
+                                    className={`flex flex-col items-center p-2 rounded-lg ${currentView === item.id ? (item.id === 'ai_assistant' ? 'text-purple-600' : 'text-blue-600') : 'text-gray-500'}`}>
                                     {item.icon}
                                     <span className="text-[10px] mt-1 font-medium">{item.label}</span>
                                 </button>
