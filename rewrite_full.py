@@ -1,10 +1,12 @@
-<!DOCTYPE html>
+import re
+
+html_content = r"""<!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>New Gates Hotel PMS</title>
-    
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -29,7 +31,7 @@
         const SUPABASE_URL = 'https://wzammfnzptusiicwdaut.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_Jk23sVPoYwengKLIjL78ww_Az4d7Tl-';
         const GEMINI_API_KEY = 'AIzaSyA92TBUTDqARe9mcVI7uTChuRGYe6vK9RY';
-        
+
         const isConfigured = SUPABASE_URL.startsWith('http');
         const supabase = isConfigured ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
@@ -105,21 +107,21 @@
                         <form onSubmit={handleLogin} className="space-y-5">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Kode Hotel</label>
-                                <input type="text" required className="w-full border p-3 rounded-lg uppercase" 
-                                    placeholder="Cth: GATES-001" 
+                                <input type="text" required className="w-full border p-3 rounded-lg uppercase"
+                                    placeholder="Cth: GATES-001"
                                     value={formData.tenant_id}
                                     onChange={(e) => setFormData({...formData, tenant_id: e.target.value.trim()})} />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Email Staf/Admin</label>
-                                <input type="email" required className="w-full border p-3 rounded-lg" 
+                                <input type="email" required className="w-full border p-3 rounded-lg"
                                     placeholder="email@hotel.com"
                                     value={formData.email}
                                     onChange={(e) => setFormData({...formData, email: e.target.value.trim()})} />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                                <input type="password" required className="w-full border p-3 rounded-lg" 
+                                <input type="password" required className="w-full border p-3 rounded-lg"
                                     value={formData.password}
                                     onChange={(e) => setFormData({...formData, password: e.target.value})} />
                             </div>
@@ -175,7 +177,7 @@
                                 {!response && !loading && <div className="h-full flex items-center justify-center text-gray-400 text-sm text-center">Halo! Silakan tanya saya apa saja.</div>}
                                 {loading && <div className="flex items-center justify-center text-purple-600 h-full font-medium">Sedang berpikir...</div>}
                                 {response && !loading && (
-                                    <div className="text-gray-800 text-sm leading-relaxed ai-content" 
+                                    <div className="text-gray-800 text-sm leading-relaxed ai-content"
                                          dangerouslySetInnerHTML={{ __html: response.replace(/\n/g, '<br/>') }}></div>
                                 )}
                             </div>
@@ -470,192 +472,12 @@
             );
         };
 
-        // --- Segmentation Setting ---
-        const SegmentationSetting = ({ tenantId, showToast }) => {
-            const [groups, setGroups] = useState([]);
-            const [codes, setCodes] = useState([]);
-            const [selectedGroupId, setSelectedGroupId] = useState(null);
-            const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
-            const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
-            const [editingGroup, setEditingGroup] = useState(null);
-            const [editingCode, setEditingCode] = useState(null);
-            const [groupForm, setGroupForm] = useState({ description: '' });
-            const [codeForm, setCodeForm] = useState({ group_id: '', code: '', description: '' });
-
-            const fetchData = useCallback(async () => {
-                try {
-                    const [resG, resC] = await Promise.all([
-                        supabase.from('segmentation_groups').select('*').eq('tenant_id', tenantId).order('id'),
-                        supabase.from('segmentation_codes').select('*').eq('tenant_id', tenantId).order('id')
-                    ]);
-                    if (resG.data) setGroups(resG.data);
-                    if (resC.data) setCodes(resC.data);
-                } catch (e) { console.error(e); }
-            }, [tenantId]);
-
-            useEffect(() => { fetchData(); }, [fetchData]);
-
-            const handleGroupSubmit = async (e) => {
-                e.preventDefault();
-                try {
-                    if (editingGroup) {
-                        await supabase.from('segmentation_groups').update(groupForm).eq('id', editingGroup.id);
-                    } else {
-                        await supabase.from('segmentation_groups').insert([{ ...groupForm, tenant_id: tenantId }]);
-                    }
-                    setIsGroupModalOpen(false); fetchData(); showToast("Berhasil simpan grup!");
-                } catch (err) { showToast(err.message, "error"); }
-            };
-
-            const handleCodeSubmit = async (e) => {
-                e.preventDefault();
-                try {
-                    if (editingCode) {
-                        await supabase.from('segmentation_codes').update(codeForm).eq('id', editingCode.id);
-                    } else {
-                        await supabase.from('segmentation_codes').insert([{ ...codeForm, tenant_id: tenantId }]);
-                    }
-                    setIsCodeModalOpen(false); fetchData(); showToast("Berhasil simpan kode!");
-                } catch (err) { showToast(err.message, "error"); }
-            };
-
-            const filteredCodes = selectedGroupId ? codes.filter(c => c.group_id === selectedGroupId) : codes;
-
-            return (
-                <div className="space-y-8">
-                    <div className="space-y-4">
-                        <div className="flex justify-between items-center">
-                            <h3 className="font-bold text-lg text-gray-800">Main Group Segments</h3>
-                            <button onClick={() => { setEditingGroup(null); setGroupForm({description:''}); setIsGroupModalOpen(true); }} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2 shadow-sm hover:bg-blue-700 transition-colors">
-                                <Icons.Plus /> Tambah Grup
-                            </button>
-                        </div>
-                        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                            <table className="w-full text-left text-sm">
-                                <thead className="bg-gray-50 border-b border-gray-200">
-                                    <tr>
-                                        <th className="p-4 w-16 text-gray-500 font-medium">No</th>
-                                        <th className="p-4 text-gray-500 font-medium">Description</th>
-                                        <th className="p-4 w-32 text-right text-gray-500 font-medium">Aksi</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    {groups.map((g, idx) => (
-                                        <tr key={g.id} className={`hover:bg-blue-50/50 cursor-pointer transition-colors ${selectedGroupId === g.id ? 'bg-blue-50 border-l-4 border-l-blue-600' : ''}`} onClick={() => setSelectedGroupId(g.id)}>
-                                            <td className="p-4 text-gray-600">{idx + 1}</td>
-                                            <td className="p-4 font-semibold text-gray-700 uppercase">{g.description}</td>
-                                            <td className="p-4 text-right space-x-3" onClick={e => e.stopPropagation()}>
-                                                <button onClick={() => { setEditingGroup(g); setGroupForm({description: g.description}); setIsGroupModalOpen(true); }} className="text-blue-600 hover:text-blue-800"><Icons.Edit /></button>
-                                                <button onClick={() => { if(confirm("Hapus grup ini?")) supabase.from('segmentation_groups').delete().eq('id', g.id).then(fetchData); }} className="text-red-500 hover:text-red-700"><Icons.Trash /></button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {groups.length === 0 && <tr><td colSpan="3" className="p-12 text-center text-gray-400 italic">Belum ada data Main Group.</td></tr>}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <div className="space-y-4">
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <h3 className="font-bold text-lg text-gray-800">Segment Code Setup</h3>
-                                {selectedGroupId && <p className="text-sm text-blue-600 font-medium">Filter: {groups.find(g=>g.id === selectedGroupId)?.description}</p>}
-                            </div>
-                            <div className="flex gap-3">
-                                {selectedGroupId && <button onClick={() => setSelectedGroupId(null)} className="text-sm text-gray-500 hover:text-blue-600 font-medium transition-colors">Tampilkan Semua</button>}
-                                <button onClick={() => { setEditingCode(null); setCodeForm({group_id: selectedGroupId || '', code: '', description: ''}); setIsCodeModalOpen(true); }} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-2 shadow-sm hover:bg-indigo-700 transition-colors">
-                                    <Icons.Plus /> Tambah Segment Code
-                                </button>
-                            </div>
-                        </div>
-                        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                            <table className="w-full text-left text-sm">
-                                <thead className="bg-gray-50 border-b border-gray-200">
-                                    <tr>
-                                        <th className="p-4 w-16 text-gray-500 font-medium">No</th>
-                                        <th className="p-4 w-40 text-gray-500 font-medium">Main Group</th>
-                                        <th className="p-4 w-32 text-gray-500 font-medium">Code</th>
-                                        <th className="p-4 text-gray-500 font-medium">Description</th>
-                                        <th className="p-4 w-24 text-right text-gray-500 font-medium">Aksi</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    {filteredCodes.map((c, idx) => (
-                                        <tr key={c.id} className="hover:bg-gray-50 transition-colors">
-                                            <td className="p-4 text-gray-600">{idx + 1}</td>
-                                            <td className="p-4 text-gray-600 uppercase text-xs font-medium">{groups.find(g=>g.id === c.group_id)?.description || '-'}</td>
-                                            <td className="p-4 font-bold text-indigo-600">{c.code}</td>
-                                            <td className="p-4 text-gray-700">{c.description}</td>
-                                            <td className="p-4 text-right space-x-3">
-                                                <button onClick={() => { setEditingCode(c); setCodeForm({group_id: c.group_id, code: c.code, description: c.description}); setIsCodeModalOpen(true); }} className="text-blue-600 hover:text-blue-800"><Icons.Edit /></button>
-                                                <button onClick={() => { if(confirm("Hapus kode ini?")) supabase.from('segmentation_codes').delete().eq('id', c.id).then(fetchData); }} className="text-red-500 hover:text-red-700"><Icons.Trash /></button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {filteredCodes.length === 0 && <tr><td colSpan="5" className="p-12 text-center text-gray-400 italic">Klik pada Main Group di atas atau tambah kode baru.</td></tr>}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    {isGroupModalOpen && (
-                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
-                            <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl animate-in fade-in zoom-in duration-200">
-                                <h3 className="text-xl font-bold text-gray-800 mb-6">{editingGroup ? 'Edit' : 'Tambah'} Main Group</h3>
-                                <form onSubmit={handleGroupSubmit} className="space-y-5">
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
-                                        <input required className="w-full border border-gray-300 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all uppercase" placeholder="MISAL: CORPORATE" value={groupForm.description} onChange={e=>setGroupForm({description: e.target.value})} />
-                                    </div>
-                                    <div className="flex justify-end gap-3 pt-4">
-                                        <button type="button" onClick={() => setIsGroupModalOpen(false)} className="px-5 py-2.5 text-gray-500 font-medium hover:text-gray-700 transition-colors">Batal</button>
-                                        <button type="submit" className="bg-blue-600 text-white px-8 py-2.5 rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all">Simpan Grup</button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    )}
-
-                    {isCodeModalOpen && (
-                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
-                            <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl animate-in fade-in zoom-in duration-200">
-                                <h3 className="text-xl font-bold text-gray-800 mb-6">{editingCode ? 'Edit' : 'Tambah'} Segment Code</h3>
-                                <form onSubmit={handleCodeSubmit} className="space-y-5">
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Main Group</label>
-                                        <select required className="w-full border border-gray-300 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all" value={codeForm.group_id} onChange={e=>setCodeForm({...codeForm, group_id: e.target.value})}>
-                                            <option value="">-- Pilih Group --</option>
-                                            {groups.map(g => <option key={g.id} value={g.id}>{g.description}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Segment Code</label>
-                                        <input required className="w-full border border-gray-300 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all uppercase" placeholder="MISAL: GOFI" value={codeForm.code} onChange={e=>setCodeForm({...codeForm, code: e.target.value})} />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
-                                        <input required className="w-full border border-gray-300 p-3 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all" placeholder="MISAL: GOVERNMENT FIT" value={codeForm.description} onChange={e=>setCodeForm({...codeForm, description: e.target.value})} />
-                                    </div>
-                                    <div className="flex justify-end gap-3 pt-4">
-                                        <button type="button" onClick={() => setIsCodeModalOpen(false)} className="px-5 py-2.5 text-gray-500 font-medium hover:text-gray-700 transition-colors">Batal</button>
-                                        <button type="submit" className="bg-indigo-600 text-white px-8 py-2.5 rounded-xl font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all">Simpan Kode</button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            );
-        };
-
         // --- Hotel Config Main View ---
         const HotelConfigView = ({ session, showToast }) => {
             const [activeTab, setActiveTab] = useState('room_category');
             const tabs = [
                 { id: 'room_category', label: 'Room Category' },
                 { id: 'room_number', label: 'Room Number' },
-                { id: 'segmentation', label: 'Segmentation' },
                 { id: 'rate', label: 'Rate Structure' },
                 { id: 'user', label: 'User Config' }
             ];
@@ -670,14 +492,13 @@
                         <div className="flex border-b overflow-x-auto">
                             {tabs.map(t => (
                                 <button key={t.id} onClick={() => setActiveTab(t.id)}
-                                    className={`px-6 py-4 text-sm font-medium whitespace-nowrap transition-colors ${activeTab === t.id ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>{t.label}</button>
+                                    className={`px-6 py-4 text-sm font-medium ${activeTab === t.id ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'}`}>{t.label}</button>
                             ))}
                         </div>
                         <div className="p-6">
                             {activeTab === 'room_category' && <RoomCategorySetting tenantId={session.tenant_id} showToast={showToast} />}
                             {activeTab === 'room_number' && <RoomNumberSetting tenantId={session.tenant_id} showToast={showToast} />}
-                            {activeTab === 'segmentation' && <SegmentationSetting tenantId={session.tenant_id} showToast={showToast} />}
-                            {!['room_category', 'room_number', 'segmentation'].includes(activeTab) && <div className="py-20 text-center text-gray-500">Fitur sedang dikembangkan.</div>}
+                            {!['room_category', 'room_number'].includes(activeTab) && <div className="py-20 text-center text-gray-500">Fitur sedang dikembangkan.</div>}
                         </div>
                     </div>
                 </div>
@@ -740,3 +561,7 @@
     </script>
 </body>
 </html>
+"""
+
+with open('index.html', 'w') as f:
+    f.write(html_content)
