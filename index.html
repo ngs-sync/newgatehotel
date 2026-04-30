@@ -190,7 +190,7 @@
         };
 
         // --- Dashboard ---
-        const Dashboard = ({ tenantId }) => {
+        const Dashboard = ({ tenantId, showToast }) => {
             const [stats, setStats] = useState({ rooms: 0, res: 0, rev: 0 });
             useEffect(() => {
                 const fetchStats = async () => {
@@ -199,13 +199,17 @@
                             supabase.from('rooms').select('id', { count: 'exact' }).eq('tenant_id', tenantId),
                             supabase.from('reservations').select('total_amount').eq('tenant_id', tenantId)
                         ]);
+                        if (resRooms.error) throw resRooms.error;
+                        if (resRes.error) throw resRes.error;
                         let totalRev = 0;
                         if(resRes.data) totalRev = resRes.data.reduce((sum, b) => sum + (Number(b.total_amount) || 0), 0);
                         setStats({ rooms: resRooms.count || 0, res: resRes.data?.length || 0, rev: totalRev });
-                    } catch (e) {}
+                    } catch (e) {
+                        showToast("Gagal memuat statistik: " + e.message, "error");
+                    }
                 };
                 if(tenantId) fetchStats();
-            }, [tenantId]);
+            }, [tenantId, showToast]);
 
             return (
                 <div className="space-y-6">
@@ -226,15 +230,16 @@
         };
 
         // --- Rooms ---
-        const RoomsView = ({ tenantId }) => {
+        const RoomsView = ({ tenantId, showToast }) => {
             const [rooms, setRooms] = useState([]);
             useEffect(() => {
                 const fetchRooms = async () => {
-                    const { data } = await supabase.from('rooms').select('*').eq('tenant_id', tenantId).order('room_number');
+                    const { data, error } = await supabase.from('rooms').select('*').eq('tenant_id', tenantId).order('room_number');
+                    if (error) showToast("Gagal memuat kamar: " + error.message, "error");
                     if (data) setRooms(data);
                 };
                 if(tenantId) fetchRooms();
-            }, [tenantId]);
+            }, [tenantId, showToast]);
             return (
                 <div className="space-y-6">
                     <h2 className="text-2xl font-bold text-gray-800">Housekeeping</h2>
@@ -257,10 +262,11 @@
             const [form, setForm] = useState({ guest_name: '', check_in: '', check_out: '', total_amount: 0 });
 
             const fetchRes = async () => {
-                const { data } = await supabase.from('reservations').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false });
+                const { data, error } = await supabase.from('reservations').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false });
+                if (error) showToast("Gagal memuat reservasi: " + error.message, "error");
                 if (data) setReservations(data);
             };
-            useEffect(() => { if(tenantId) fetchRes(); }, [tenantId]);
+            useEffect(() => { if(tenantId) fetchRes(); }, [tenantId, showToast]);
 
             const handleSubmit = async (e) => {
                 e.preventDefault();
@@ -322,7 +328,8 @@
             const [form, setForm] = useState({ name: '', bed_type: '', total_rooms: '' });
 
             const fetchCats = async () => {
-                const { data } = await supabase.from('room_categories').select('*').eq('tenant_id', tenantId).order('name');
+                const { data, error } = await supabase.from('room_categories').select('*').eq('tenant_id', tenantId).order('name');
+                if (error) showToast("Gagal memuat kategori: " + error.message, "error");
                 if (data) setCategories(data);
             };
             useEffect(() => { fetchCats(); }, []);
@@ -334,13 +341,15 @@
             const handleSubmit = async (e) => {
                 e.preventDefault();
                 try {
+                    let res;
                     if (editingItem) {
-                        await supabase.from('room_categories').update(form).eq('id', editingItem.id);
+                        res = await supabase.from('room_categories').update(form).eq('id', editingItem.id);
                     } else {
-                        await supabase.from('room_categories').insert([{ ...form, tenant_id: tenantId }]);
+                        res = await supabase.from('room_categories').insert([{ ...form, tenant_id: tenantId }]);
                     }
-                    setIsModalOpen(false); fetchCats();
-                } catch (err) { showToast(err.message, "error"); }
+                    if (res.error) throw res.error;
+                    setIsModalOpen(false); fetchCats(); showToast("Berhasil simpan kategori!");
+                } catch (err) { showToast("Gagal simpan kategori: " + err.message, "error"); }
             };
 
             return (
@@ -356,7 +365,13 @@
                                 <td>{cat.name}</td><td>{cat.bed_type}</td>
                                 <td className="space-x-2">
                                     <button onClick={() => openEdit(cat)} className="text-blue-600"><Icons.Edit /></button>
-                                    <button onClick={() => { if(confirm("Hapus?")) supabase.from('room_categories').delete().eq('id', cat.id).then(fetchCats); }} className="text-red-600"><Icons.Trash /></button>
+                                    <button onClick={async () => {
+                                        if(confirm("Hapus?")) {
+                                            const { error } = await supabase.from('room_categories').delete().eq('id', cat.id);
+                                            if (error) showToast("Gagal hapus: " + error.message, "error");
+                                            else { showToast("Kategori dihapus!"); fetchCats(); }
+                                        }
+                                    }} className="text-red-600"><Icons.Trash /></button>
                                 </td>
                             </tr>
                         ))}</tbody>
@@ -393,6 +408,8 @@
                     supabase.from('rooms').select('*, room_categories(name)').eq('tenant_id', tenantId).order('room_number'),
                     supabase.from('room_categories').select('*').eq('tenant_id', tenantId).order('name')
                 ]);
+                if (r1.error) showToast("Gagal memuat kamar: " + r1.error.message, "error");
+                if (r2.error) showToast("Gagal memuat kategori: " + r2.error.message, "error");
                 if (r1.data) setRooms(r1.data);
                 if (r2.data) setCategories(r2.data);
             };
@@ -405,14 +422,21 @@
             const handleSubmit = async (e) => {
                 e.preventDefault();
                 try {
+                    let res;
                     if (editingItem) {
-                        await supabase.from('rooms').update(editForm).eq('id', editingItem.id);
+                        res = await supabase.from('rooms').update(editForm).eq('id', editingItem.id);
                     } else {
                         const payload = bulkRows.filter(r=>r.num).map(r=>({room_number: r.num, floor: r.floor, tenant_id: tenantId, category_id: selectedCategoryId, status: 'available'}));
-                        if (payload.length) await supabase.from('rooms').insert(payload);
+                        if (payload.length) {
+                            res = await supabase.from('rooms').insert(payload);
+                        } else {
+                            showToast("Tidak ada data kamar untuk disimpan", "error");
+                            return;
+                        }
                     }
-                    setIsModalOpen(false); fetchData(); showToast("Berhasil!");
-                } catch (err) { showToast(err.message, "error"); }
+                    if (res.error) throw res.error;
+                    setIsModalOpen(false); fetchData(); showToast("Berhasil simpan data kamar!");
+                } catch (err) { showToast("Gagal simpan: " + err.message, "error"); }
             };
 
             const addRow = () => setBulkRows([...bulkRows, { num: '', floor: '' }]);
@@ -430,7 +454,13 @@
                                 <td>{r.room_number}</td><td>{r.room_categories?.name}</td>
                                 <td className="space-x-2">
                                     <button onClick={() => openEdit(r)} className="text-blue-600"><Icons.Edit /></button>
-                                    <button onClick={() => { if(confirm("Hapus?")) supabase.from('rooms').delete().eq('id', r.id).then(fetchData); }} className="text-red-600"><Icons.Trash /></button>
+                                    <button onClick={async () => {
+                                        if(confirm("Hapus?")) {
+                                            const { error } = await supabase.from('rooms').delete().eq('id', r.id);
+                                            if (error) showToast("Gagal hapus: " + error.message, "error");
+                                            else { showToast("Kamar dihapus!"); fetchData(); }
+                                        }
+                                    }} className="text-red-600"><Icons.Trash /></button>
                                 </td>
                             </tr>
                         ))}</tbody>
@@ -488,35 +518,44 @@
                         supabase.from('segmentation_groups').select('*').eq('tenant_id', tenantId).order('id'),
                         supabase.from('segmentation_codes').select('*').eq('tenant_id', tenantId).order('id')
                     ]);
+                    if (resG.error) throw resG.error;
+                    if (resC.error) throw resC.error;
                     if (resG.data) setGroups(resG.data);
                     if (resC.data) setCodes(resC.data);
-                } catch (e) { console.error(e); }
-            }, [tenantId]);
+                } catch (e) {
+                    console.error(e);
+                    showToast("Gagal memuat data: " + e.message, "error");
+                }
+            }, [tenantId, showToast]);
 
             useEffect(() => { fetchData(); }, [fetchData]);
 
             const handleGroupSubmit = async (e) => {
                 e.preventDefault();
                 try {
+                    let res;
                     if (editingGroup) {
-                        await supabase.from('segmentation_groups').update(groupForm).eq('id', editingGroup.id);
+                        res = await supabase.from('segmentation_groups').update(groupForm).eq('id', editingGroup.id);
                     } else {
-                        await supabase.from('segmentation_groups').insert([{ ...groupForm, tenant_id: tenantId }]);
+                        res = await supabase.from('segmentation_groups').insert([{ ...groupForm, tenant_id: tenantId }]);
                     }
+                    if (res.error) throw res.error;
                     setIsGroupModalOpen(false); fetchData(); showToast("Berhasil simpan grup!");
-                } catch (err) { showToast(err.message, "error"); }
+                } catch (err) { showToast("Gagal simpan grup: " + err.message, "error"); }
             };
 
             const handleCodeSubmit = async (e) => {
                 e.preventDefault();
                 try {
+                    let res;
                     if (editingCode) {
-                        await supabase.from('segmentation_codes').update(codeForm).eq('id', editingCode.id);
+                        res = await supabase.from('segmentation_codes').update(codeForm).eq('id', editingCode.id);
                     } else {
-                        await supabase.from('segmentation_codes').insert([{ ...codeForm, tenant_id: tenantId }]);
+                        res = await supabase.from('segmentation_codes').insert([{ ...codeForm, tenant_id: tenantId }]);
                     }
+                    if (res.error) throw res.error;
                     setIsCodeModalOpen(false); fetchData(); showToast("Berhasil simpan kode!");
-                } catch (err) { showToast(err.message, "error"); }
+                } catch (err) { showToast("Gagal simpan kode: " + err.message, "error"); }
             };
 
             const filteredCodes = selectedGroupId ? codes.filter(c => c.group_id === selectedGroupId) : codes;
@@ -546,7 +585,13 @@
                                             <td className="p-4 font-semibold text-gray-700 uppercase">{g.description}</td>
                                             <td className="p-4 text-right space-x-3" onClick={e => e.stopPropagation()}>
                                                 <button onClick={() => { setEditingGroup(g); setGroupForm({description: g.description}); setIsGroupModalOpen(true); }} className="text-blue-600 hover:text-blue-800"><Icons.Edit /></button>
-                                                <button onClick={() => { if(confirm("Hapus grup ini?")) supabase.from('segmentation_groups').delete().eq('id', g.id).then(fetchData); }} className="text-red-500 hover:text-red-700"><Icons.Trash /></button>
+                                                <button onClick={async () => {
+                                                    if(confirm("Hapus grup ini?")) {
+                                                        const { error } = await supabase.from('segmentation_groups').delete().eq('id', g.id);
+                                                        if (error) showToast("Gagal hapus grup: " + error.message, "error");
+                                                        else { showToast("Grup dihapus!"); fetchData(); }
+                                                    }
+                                                }} className="text-red-500 hover:text-red-700"><Icons.Trash /></button>
                                             </td>
                                         </tr>
                                     ))}
@@ -589,7 +634,13 @@
                                             <td className="p-4 text-gray-700">{c.description}</td>
                                             <td className="p-4 text-right space-x-3">
                                                 <button onClick={() => { setEditingCode(c); setCodeForm({group_id: c.group_id, code: c.code, description: c.description}); setIsCodeModalOpen(true); }} className="text-blue-600 hover:text-blue-800"><Icons.Edit /></button>
-                                                <button onClick={() => { if(confirm("Hapus kode ini?")) supabase.from('segmentation_codes').delete().eq('id', c.id).then(fetchData); }} className="text-red-500 hover:text-red-700"><Icons.Trash /></button>
+                                                <button onClick={async () => {
+                                                    if(confirm("Hapus kode ini?")) {
+                                                        const { error } = await supabase.from('segmentation_codes').delete().eq('id', c.id);
+                                                        if (error) showToast("Gagal hapus kode: " + error.message, "error");
+                                                        else { showToast("Kode dihapus!"); fetchData(); }
+                                                    }
+                                                }} className="text-red-500 hover:text-red-700"><Icons.Trash /></button>
                                             </td>
                                         </tr>
                                     ))}
@@ -723,9 +774,9 @@
                     </div>
                     <div className="flex-1 flex flex-col h-screen overflow-hidden">
                         <main className="flex-1 overflow-y-auto p-4 md:p-8">
-                            {currentView === 'dashboard' && <Dashboard tenantId={session.tenant_id} />}
+                            {currentView === 'dashboard' && <Dashboard tenantId={session.tenant_id} showToast={showToast} />}
                             {currentView === 'reservations' && <ReservationsView tenantId={session.tenant_id} showToast={showToast} />}
-                            {currentView === 'rooms' && <RoomsView tenantId={session.tenant_id} />}
+                            {currentView === 'rooms' && <RoomsView tenantId={session.tenant_id} showToast={showToast} />}
                             {currentView === 'ai' && <AIAssistantView showToast={showToast} />}
                             {currentView === 'config' && <HotelConfigView session={session} showToast={showToast} />}
                         </main>
