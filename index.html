@@ -400,8 +400,8 @@
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [editingItem, setEditingItem] = useState(null);
             const [selectedCategoryId, setSelectedCategoryId] = useState('');
-            const [bulkRows, setBulkRows] = useState([{ num: '', floor: '' }]);
-            const [editForm, setEditForm] = useState({ room_number: '', category_id: '', floor: '' });
+            const [bulkRows, setBulkRows] = useState([{ num: '', floor: '', building: '' }]);
+            const [editForm, setEditForm] = useState({ room_number: '', category_id: '', floor: '', building: '' });
 
             const fetchData = async () => {
                 const [r1, r2] = await Promise.all([
@@ -415,8 +415,8 @@
             };
             useEffect(() => { fetchData(); }, []);
 
-            const openAdd = () => { setEditingItem(null); setSelectedCategoryId(''); setBulkRows([{ num: '', floor: '' }]); setIsModalOpen(true); };
-            const openEdit = (r) => { setEditingItem(r); setEditForm({ room_number: r.room_number, category_id: r.category_id, floor: r.floor }); setIsModalOpen(true); };
+            const openAdd = () => { setEditingItem(null); setSelectedCategoryId(''); setBulkRows([{ num: '', floor: '', building: '' }]); setIsModalOpen(true); };
+            const openEdit = (r) => { setEditingItem(r); setEditForm({ room_number: r.room_number, category_id: r.category_id, floor: r.floor || '', building: r.building || '' }); setIsModalOpen(true); };
             const closeBtn = () => setIsModalOpen(false);
 
             const handleSubmit = async (e) => {
@@ -426,7 +426,14 @@
                     if (editingItem) {
                         res = await supabase.from('rooms').update(editForm).eq('id', editingItem.id);
                     } else {
-                        const payload = bulkRows.filter(r=>r.num).map(r=>({room_number: r.num, floor: r.floor, tenant_id: tenantId, category_id: selectedCategoryId, status: 'available'}));
+                        const payload = bulkRows.filter(r=>r.num).map(r=>({
+                            room_number: r.num,
+                            floor: r.floor,
+                            building: r.building,
+                            tenant_id: tenantId,
+                            category_id: selectedCategoryId,
+                            status: 'available'
+                        }));
                         if (payload.length) {
                             res = await supabase.from('rooms').insert(payload);
                         } else {
@@ -439,7 +446,12 @@
                 } catch (err) { showToast("Gagal simpan: " + err.message, "error"); }
             };
 
-            const addRow = () => setBulkRows([...bulkRows, { num: '', floor: '' }]);
+            const addRow = () => setBulkRows([...bulkRows, { num: '', floor: '', building: '' }]);
+            const removeRow = (index) => {
+                if (bulkRows.length > 1) {
+                    setBulkRows(bulkRows.filter((_, i) => i !== index));
+                }
+            };
 
             return (
                 <div className="space-y-4">
@@ -448,10 +460,11 @@
                         <button onClick={openAdd} className="bg-blue-600 text-white px-3 py-1 rounded text-sm"><Icons.Plus /> Tambah Bulk</button>
                     </div>
                     <table className="w-full text-left">
-                        <thead><tr className="bg-gray-50 border-b"><th>No</th><th>Tipe</th><th>Aksi</th></tr></thead>
+                        <thead><tr className="bg-gray-50 border-b"><th>No</th><th>Tipe</th><th>Gedung/Lantai</th><th>Aksi</th></tr></thead>
                         <tbody>{rooms.map(r => (
                             <tr key={r.id} className="border-b">
                                 <td>{r.room_number}</td><td>{r.room_categories?.name}</td>
+                                <td>{r.building || '-'}{r.floor ? ` / Lt.${r.floor}` : ''}</td>
                                 <td className="space-x-2">
                                     <button onClick={() => openEdit(r)} className="text-blue-600"><Icons.Edit /></button>
                                     <button onClick={async () => {
@@ -476,18 +489,24 @@
                                                 <option value="">Pilih Tipe</option>{categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
                                             </select>
                                             <input required placeholder="No Kamar" className="w-full border p-2 rounded" value={editForm.room_number} onChange={e=>setEditForm({...editForm, room_number: e.target.value})} />
+                                            <input placeholder="Lantai" className="w-full border p-2 rounded" value={editForm.floor} onChange={e=>setEditForm({...editForm, floor: e.target.value})} />
+                                            <input placeholder="Gedung" className="w-full border p-2 rounded" value={editForm.building} onChange={e=>setEditForm({...editForm, building: e.target.value})} />
                                         </div>
                                     ) : (
                                         <div className="space-y-4">
                                             <select required value={selectedCategoryId} onChange={e=>setSelectedCategoryId(e.target.value)} className="w-full border p-2 rounded">
                                                 <option value="">-- Pilih Tipe Kamar --</option>{categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
                                             </select>
-                                            {bulkRows.map((row, i) => (
-                                                <div key={i} className="flex gap-2">
-                                                    <input required placeholder="No" className="flex-1 border p-2 rounded" value={row.num} onChange={e=>{const n=[...bulkRows]; n[i].num=e.target.value; setBulkRows(n);}} />
-                                                    <input placeholder="Lantai" className="w-24 border p-2 rounded" value={row.floor} onChange={e=>{const n=[...bulkRows]; n[i].floor=e.target.value; setBulkRows(n);}} />
-                                                </div>
-                                            ))}
+                                            <div className="space-y-2">
+                                                {bulkRows.map((row, i) => (
+                                                    <div key={i} className="flex gap-2 items-center">
+                                                        <input required placeholder="No" className="w-20 border p-2 rounded" value={row.num} onChange={e=>setBulkRows(bulkRows.map((r,idx)=>idx===i?{...r,num:e.target.value}:r))} />
+                                                        <input placeholder="Lantai" className="w-20 border p-2 rounded" value={row.floor} onChange={e=>setBulkRows(bulkRows.map((r,idx)=>idx===i?{...r,floor:e.target.value}:r))} />
+                                                        <input placeholder="Gedung" className="flex-1 border p-2 rounded" value={row.building} onChange={e=>setBulkRows(bulkRows.map((r,idx)=>idx===i?{...r,building:e.target.value}:r))} />
+                                                        <button type="button" onClick={() => removeRow(i)} className="text-red-500 p-2"><Icons.Trash /></button>
+                                                    </div>
+                                                ))}
+                                            </div>
                                             <button type="button" onClick={addRow} className="text-blue-600">+ Baris</button>
                                         </div>
                                     )}
