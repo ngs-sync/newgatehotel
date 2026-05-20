@@ -304,7 +304,7 @@
 
             const closeBtn = () => setIsModalOpen(false);
             const openBtn = () => {
-                setForm({ guest_name: '', check_in: '', check_out: '', total_amount: 0, rate_code: '' });
+                setForm({ guest_name: '', check_in: '', check_out: '', total_amount: 0, rate_code: '', room_category_id: '' });
                 setIsModalOpen(true);
             };
 
@@ -351,25 +351,32 @@
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Tipe Kamar</label>
+                                            <select required className="w-full border p-2 rounded" value={form.room_category_id} onChange={e => handleRateOrCategoryChange({room_category_id: e.target.value})}>
+                                                <option value="">-- Pilih Tipe --</option>
+                                                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">Rate Code</label>
-                                            <select required className="w-full border p-2 rounded" value={form.rate_code} onChange={e => handleRateChange(e.target.value)}>
+                                            <select required className="w-full border p-2 rounded" value={form.rate_code} onChange={e => handleRateOrCategoryChange({rate_code: e.target.value})}>
                                                 <option value="">-- Pilih Rate --</option>
                                                 {rates.map(r => <option key={r.id} value={r.rate_code}>{r.rate_code} - {r.rate_name}</option>)}
                                             </select>
                                         </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Room Rate</label>
-                                            <input
-                                                required
-                                                type="number"
-                                                className={`w-full border p-2 rounded ${!isAdhoc && form.rate_code ? 'bg-gray-100' : ''}`}
-                                                placeholder="0"
-                                                value={form.total_amount}
-                                                readOnly={!isAdhoc && form.rate_code !== ''}
-                                                onChange={e=>setForm({...form, total_amount: e.target.value})}
-                                            />
-                                            {!isAdhoc && form.rate_code && <p className="text-[10px] text-gray-500 mt-1">* Read-only untuk rate ini</p>}
-                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Room Rate (Base Rate)</label>
+                                        <input
+                                            required
+                                            type="number"
+                                            className={`w-full border p-2 rounded ${!isAdhoc && form.rate_code ? 'bg-gray-100 font-bold text-blue-600' : ''}`}
+                                            placeholder="0"
+                                            value={form.total_amount}
+                                            readOnly={!isAdhoc && form.rate_code !== ''}
+                                            onChange={e=>setForm({...form, total_amount: e.target.value})}
+                                        />
+                                        {!isAdhoc && form.rate_code && <p className="text-[10px] text-gray-500 mt-1">* Auto-fill berdasarkan tipe kamar & rate code</p>}
                                     </div>
                                     <div className="flex justify-end gap-2 pt-4 border-t"><button type="button" onClick={closeBtn}>Batal</button><button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded font-bold">Simpan Reservasi</button></div>
                                 </form>
