@@ -259,49 +259,34 @@
         const ReservationsView = ({ tenantId, showToast }) => {
             const [reservations, setReservations] = useState([]);
             const [rates, setRates] = useState([]);
-            const [categories, setCategories] = useState([]);
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [form, setForm] = useState({
                 guest_name: '',
                 check_in: '',
                 check_out: '',
                 total_amount: 0,
-                rate_code: '',
-                room_category_id: ''
+                rate_code: ''
             });
 
             const fetchData = async () => {
-                const [resR, resRates, resC] = await Promise.all([
+                const [resR, resRates] = await Promise.all([
                     supabase.from('reservations').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false }),
-                    supabase.from('rate_structures').select('*').eq('tenant_id', tenantId).order('rate_code'),
-                    supabase.from('room_categories').select('*').eq('tenant_id', tenantId).order('name')
+                    supabase.from('rate_structures').select('*').eq('tenant_id', tenantId).order('rate_code')
                 ]);
                 if (resR.error) showToast("Gagal memuat reservasi: " + resR.error.message, "error");
                 if (resRates.error) showToast("Gagal memuat Rate: " + resRates.error.message, "error");
-                if (resC.error) showToast("Gagal memuat kategori: " + resC.error.message, "error");
                 if (resR.data) setReservations(resR.data);
                 if (resRates.data) setRates(resRates.data);
-                if (resC.data) setCategories(resC.data);
             };
             useEffect(() => { if(tenantId) fetchData(); }, [tenantId, showToast]);
 
-            const handleRateOrCategoryChange = (updates) => {
-                const newForm = { ...form, ...updates };
-                const selectedRate = rates.find(r => r.rate_code === newForm.rate_code);
-
-                if (!newForm.rate_code) {
-                    newForm.total_amount = 0;
-                } else if (selectedRate && selectedRate.rate_code !== 'ADHOC') {
-                    const specificRate = selectedRate.room_category_rates?.[newForm.room_category_id];
-                    if (specificRate !== undefined) {
-                        newForm.total_amount = specificRate;
-                    } else {
-                        newForm.total_amount = 0; // Reset if no mapping found
-                    }
-                } else if (newForm.rate_code === 'ADHOC' && !form.rate_code) {
-                    newForm.total_amount = 0;
+            const handleRateChange = (code) => {
+                const selectedRate = rates.find(r => r.rate_code === code);
+                if (selectedRate) {
+                    setForm({ ...form, rate_code: code, total_amount: selectedRate.room_rate });
+                } else {
+                    setForm({ ...form, rate_code: code });
                 }
-                setForm(newForm);
             };
 
             const isAdhoc = form.rate_code === 'ADHOC';
@@ -311,8 +296,7 @@
                 const { error } = await supabase.from('reservations').insert([{
                     tenant_id: tenantId, reservation_number: 'RES-' + Math.floor(Math.random() * 100000),
                     guest_name: form.guest_name, check_in: form.check_in, check_out: form.check_out,
-                    total_amount: form.total_amount, status: 'confirmed',
-                    rate_code: form.rate_code, room_category_id: form.room_category_id
+                    total_amount: form.total_amount, status: 'confirmed'
                 }]);
                 if (error) { showToast(error.message, "error"); }
                 else { showToast("Berhasil!", "success"); setIsModalOpen(false); fetchData(); }
@@ -889,8 +873,9 @@
             const [form, setForm] = useState({
                 rate_code: '',
                 rate_name: '',
+                room_rate: '',
                 expiry_date: '',
-                room_category_rates: {} // { category_id: rate }
+                room_category_ids: []
             });
             const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
 
@@ -909,7 +894,7 @@
 
             const openAdd = () => {
                 setEditingItem(null);
-                setForm({ rate_code: '', rate_name: '', expiry_date: '', room_category_rates: {} });
+                setForm({ rate_code: '', rate_name: '', room_rate: '', expiry_date: '', room_category_ids: [] });
                 setIsModalOpen(true);
             };
             const openEdit = (item) => {
@@ -917,8 +902,9 @@
                 setForm({
                     rate_code: item.rate_code,
                     rate_name: item.rate_name,
+                    room_rate: item.room_rate,
                     expiry_date: item.expiry_date || '',
-                    room_category_rates: item.room_category_rates || {}
+                    room_category_ids: item.room_category_ids || []
                 });
                 setIsModalOpen(true);
             };
@@ -943,23 +929,14 @@
             };
 
             const toggleCategory = (catId) => {
-                const currentRates = { ...form.room_category_rates };
-                if (currentRates[catId] !== undefined) {
-                    delete currentRates[catId];
+                const current = [...form.room_category_ids];
+                const index = current.indexOf(catId);
+                if (index > -1) {
+                    current.splice(index, 1);
                 } else {
-                    currentRates[catId] = 0;
+                    current.push(catId);
                 }
-                setForm({ ...form, room_category_rates: currentRates });
-            };
-
-            const updateCategoryRate = (catId, value) => {
-                setForm({
-                    ...form,
-                    room_category_rates: {
-                        ...form.room_category_rates,
-                        [catId]: value
-                    }
-                });
+                setForm({ ...form, room_category_ids: current });
             };
 
             const getCategoryName = (id) => categories.find(c => c.id === id)?.name || id;
@@ -976,7 +953,8 @@
                                 <tr>
                                     <th className="p-4 text-gray-500 font-medium">Code</th>
                                     <th className="p-4 text-gray-500 font-medium">Name</th>
-                                    <th className="p-4 text-gray-500 font-medium">Room Mapping & Rates</th>
+                                    <th className="p-4 text-gray-500 font-medium">Rate</th>
+                                    <th className="p-4 text-gray-500 font-medium">Room Types Mapping</th>
                                     <th className="p-4 text-gray-500 font-medium">Expiry</th>
                                     <th className="p-4 text-right text-gray-500 font-medium">Aksi</th>
                                 </tr>
@@ -986,15 +964,13 @@
                                     <tr key={item.id} className="hover:bg-gray-50 transition-colors">
                                         <td className="p-4 font-bold text-blue-600 uppercase">{item.rate_code}</td>
                                         <td className="p-4 text-gray-700">{item.rate_name}</td>
+                                        <td className="p-4 font-mono font-bold text-gray-800">Rp {Number(item.room_rate).toLocaleString('id-ID')}</td>
                                         <td className="p-4">
-                                            <div className="space-y-1">
-                                                {Object.entries(item.room_category_rates || {}).map(([catId, rate]) => (
-                                                    <div key={catId} className="flex items-center gap-2 text-xs">
-                                                        <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100 font-medium">{getCategoryName(catId)}</span>
-                                                        <span className="font-bold">Rp {Number(rate).toLocaleString('id-ID')}</span>
-                                                    </div>
+                                            <div className="flex flex-wrap gap-1 max-w-xs">
+                                                {item.room_category_ids?.map(id => (
+                                                    <span key={id} className="bg-blue-50 text-blue-600 text-[10px] px-2 py-0.5 rounded-full border border-blue-100 font-medium">{getCategoryName(id)}</span>
                                                 ))}
-                                                {Object.keys(item.room_category_rates || {}).length === 0 && <span className="text-gray-400 italic text-xs">No Mapping</span>}
+                                                {(!item.room_category_ids || item.room_category_ids.length === 0) && <span className="text-gray-400 italic text-xs">All Room Types</span>}
                                             </div>
                                         </td>
                                         <td className="p-4 text-gray-600">{item.expiry_date || '-'}</td>
@@ -1010,19 +986,19 @@
                                         </td>
                                     </tr>
                                 ))}
-                                {rates.length === 0 && <tr><td colSpan="5" className="p-12 text-center text-gray-400 italic">Belum ada data Rate.</td></tr>}
+                                {rates.length === 0 && <tr><td colSpan="6" className="p-12 text-center text-gray-400 italic">Belum ada data Rate.</td></tr>}
                             </tbody>
                         </table>
                     </div>
 
                     {isModalOpen && (
                         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                            <div className="bg-white rounded-2xl p-8 w-full max-w-2xl shadow-2xl animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+                            <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl animate-in fade-in zoom-in duration-200">
                                 <div className="flex justify-between items-center mb-6">
                                     <h3 className="text-xl font-bold text-gray-800">{editingItem ? 'Edit' : 'Tambah'} Rate Structure</h3>
                                     <button onClick={closeBtn} className="text-gray-400 hover:text-gray-600"><Icons.Close /></button>
                                 </div>
-                                <form onSubmit={handleSubmit} className="space-y-6 flex-1 overflow-y-auto pr-2">
+                                <form onSubmit={handleSubmit} className="space-y-5">
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
                                             <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider">Rate Code</label>
@@ -1037,76 +1013,50 @@
                                         <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider">Rate Name</label>
                                         <input required className="w-full border border-gray-300 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="Cth: Early Bird Promo" value={form.rate_name} onChange={e=>setForm({...form, rate_name: e.target.value})} />
                                     </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider">Room Rate (Base Price)</label>
+                                        <input required type="number" className="w-full border border-gray-300 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-mono text-lg" placeholder="0" value={form.room_rate} onChange={e=>setForm({...form, room_rate: e.target.value})} />
+                                    </div>
 
-                                    <div className="space-y-4">
-                                        <div className="flex justify-between items-end">
-                                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">Mapping Room Type & Rates</label>
-                                            <div className="relative">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
-                                                    className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-gray-200 transition-colors"
-                                                >
-                                                    <Icons.Plus /> Bulk Add Room Type
-                                                </button>
-                                                {showCategoryDropdown && (
-                                                    <>
-                                                        <div className="fixed inset-0 z-[60]" onClick={() => setShowCategoryDropdown(false)}></div>
-                                                        <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-2xl z-[70] max-h-56 overflow-y-auto py-2 animate-in slide-in-from-top-2 duration-200">
-                                                            {categories.map(cat => (
-                                                                <div
-                                                                    key={cat.id}
-                                                                    className={`px-5 py-3 text-sm cursor-pointer flex items-center justify-between hover:bg-blue-50 transition-colors ${form.room_category_rates[cat.id] !== undefined ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700'}`}
-                                                                    onClick={() => toggleCategory(cat.id)}
-                                                                >
-                                                                    {cat.name}
-                                                                    {form.room_category_rates[cat.id] !== undefined && <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>}
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </>
-                                                )}
+                                    <div className="relative">
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider">Mapping Room Type</label>
+                                        <div
+                                            className="min-h-[52px] w-full border border-gray-300 rounded-xl p-2 flex flex-wrap gap-2 cursor-pointer bg-white items-center pr-10 focus-within:ring-2 focus-within:ring-blue-500 transition-all"
+                                            onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
+                                        >
+                                            {form.room_category_ids.length === 0 && <span className="text-gray-400 px-2 text-sm italic">Pilih Tipe Kamar (Bulk Select)...</span>}
+                                            {form.room_category_ids.map(id => (
+                                                <div key={id} className="bg-blue-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-2 shadow-sm animate-in zoom-in duration-150">
+                                                    {getCategoryName(id)}
+                                                    <span
+                                                        className="hover:bg-blue-700 rounded-full w-4 h-4 flex items-center justify-center cursor-pointer transition-colors"
+                                                        onClick={(e) => { e.stopPropagation(); toggleCategory(id); }}
+                                                    >×</span>
+                                                </div>
+                                            ))}
+                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                                                <svg className={`w-5 h-5 transition-transform duration-200 ${showCategoryDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                                             </div>
                                         </div>
 
-                                        <div className="border border-gray-200 rounded-xl overflow-hidden">
-                                            <table className="w-full text-left text-sm">
-                                                <thead className="bg-gray-50 border-b border-gray-200">
-                                                    <tr>
-                                                        <th className="p-3 text-gray-500 font-medium">Room Type</th>
-                                                        <th className="p-3 text-gray-500 font-medium">Room Rate (Base Rate)</th>
-                                                        <th className="p-3 w-10"></th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-gray-100">
-                                                    {Object.keys(form.room_category_rates).map(catId => (
-                                                        <tr key={catId} className="hover:bg-gray-50/50">
-                                                            <td className="p-3 font-medium text-gray-700">{getCategoryName(catId)}</td>
-                                                            <td className="p-3">
-                                                                <div className="relative">
-                                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">Rp</span>
-                                                                    <input
-                                                                        required
-                                                                        type="number"
-                                                                        className="w-full border border-gray-300 pl-10 pr-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all font-mono"
-                                                                        value={form.room_category_rates[catId]}
-                                                                        onChange={(e) => updateCategoryRate(catId, e.target.value)}
-                                                                    />
-                                                                </div>
-                                                            </td>
-                                                            <td className="p-3">
-                                                                <button type="button" onClick={() => toggleCategory(catId)} className="text-red-400 hover:text-red-600 transition-colors"><Icons.Trash /></button>
-                                                            </td>
-                                                        </tr>
+                                        {showCategoryDropdown && (
+                                            <>
+                                                <div className="fixed inset-0 z-[60]" onClick={() => setShowCategoryDropdown(false)}></div>
+                                                <div className="absolute left-0 right-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl z-[70] max-h-56 overflow-y-auto py-2 animate-in slide-in-from-top-2 duration-200">
+                                                    {categories.map(cat => (
+                                                        <div
+                                                            key={cat.id}
+                                                            className={`px-5 py-3 text-sm cursor-pointer flex items-center justify-between hover:bg-blue-50 transition-colors ${form.room_category_ids.includes(cat.id) ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700'}`}
+                                                            onClick={() => toggleCategory(cat.id)}
+                                                        >
+                                                            {cat.name}
+                                                            {form.room_category_ids.includes(cat.id) && <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>}
+                                                        </div>
                                                     ))}
-                                                    {Object.keys(form.room_category_rates).length === 0 && (
-                                                        <tr>
-                                                            <td colSpan="3" className="p-8 text-center text-gray-400 italic">Belum ada tipe kamar yang di-mapping.</td>
-                                                        </tr>
-                                                    )}
-                                                </tbody>
-                                            </table>
-                                        </div>
+                                                    {categories.length === 0 && <div className="p-6 text-center text-gray-400 text-sm italic">Belum ada tipe kamar yang terdaftar.</div>}
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
 
                                     <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
