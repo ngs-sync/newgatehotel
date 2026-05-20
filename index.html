@@ -719,6 +719,84 @@
             );
         };
 
+        // --- Tax & Service Setting ---
+        const TaxServiceSetting = ({ tenantId, showToast }) => {
+            const [taxes, setTaxes] = useState([]);
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [editingItem, setEditingItem] = useState(null);
+            const [form, setForm] = useState({ name: '', percentage: '', is_active: true });
+
+            const fetchTaxes = useCallback(async () => {
+                const { data, error } = await supabase.from('tax_services').select('*').eq('tenant_id', tenantId).order('name');
+                if (error) showToast("Gagal memuat Tax & Service: " + error.message, "error");
+                if (data) setTaxes(data);
+            }, [tenantId, showToast]);
+
+            useEffect(() => { fetchTaxes(); }, [fetchTaxes]);
+
+            const openAdd = () => { setEditingItem(null); setForm({ name: '', percentage: '', is_active: true }); setIsModalOpen(true); };
+            const openEdit = (item) => { setEditingItem(item); setForm({ name: item.name, percentage: item.percentage, is_active: item.is_active }); setIsModalOpen(true); };
+            const closeBtn = () => setIsModalOpen(false);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                try {
+                    let res;
+                    if (editingItem) {
+                        res = await supabase.from('tax_services').update(form).eq('id', editingItem.id);
+                    } else {
+                        res = await supabase.from('tax_services').insert([{ ...form, tenant_id: tenantId }]);
+                    }
+                    if (res.error) throw res.error;
+                    setIsModalOpen(false); fetchTaxes(); showToast("Berhasil simpan Tax & Service!");
+                } catch (err) { showToast("Gagal simpan: " + err.message, "error"); }
+            };
+
+            return (
+                <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                        <h3 className="font-bold">Master Tax & Service</h3>
+                        <button onClick={openAdd} className="bg-blue-600 text-white px-3 py-1 rounded text-sm flex items-center gap-1"><Icons.Plus /> Tambah</button>
+                    </div>
+                    <table className="w-full text-left">
+                        <thead><tr className="bg-gray-50 border-b"><th className="p-4">Nama</th><th className="p-4">Persentase (%)</th><th className="p-4">Status</th><th className="p-4">Aksi</th></tr></thead>
+                        <tbody>{taxes.map(item => (
+                            <tr key={item.id} className="border-b">
+                                <td className="p-4">{item.name}</td><td className="p-4">{item.percentage}%</td>
+                                <td className="p-4"><span className={`px-2 py-1 rounded text-xs ${item.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{item.is_active ? 'Aktif' : 'Non-Aktif'}</span></td>
+                                <td className="p-4 space-x-2">
+                                    <button onClick={() => openEdit(item)} className="text-blue-600"><Icons.Edit /></button>
+                                    <button onClick={async () => {
+                                        if(confirm("Hapus?")) {
+                                            const { error } = await supabase.from('tax_services').delete().eq('id', item.id);
+                                            if (error) showToast("Gagal hapus: " + error.message, "error");
+                                            else { showToast("Data dihapus!"); fetchTaxes(); }
+                                        }
+                                    }} className="text-red-600"><Icons.Trash /></button>
+                                </td>
+                            </tr>
+                        ))}</tbody>
+                    </table>
+                    {isModalOpen && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-xl p-6 w-full max-w-md">
+                                <h3 className="font-bold mb-4">{editingItem ? 'Edit' : 'Tambah'} Tax & Service</h3>
+                                <form onSubmit={handleSubmit} className="space-y-4">
+                                    <input required className="w-full border p-2 rounded" placeholder="Nama (Cth: PPN 11%)" value={form.name} onChange={e=>setForm({...form, name: e.target.value})} />
+                                    <input required type="number" step="0.01" className="w-full border p-2 rounded" placeholder="Persentase (%)" value={form.percentage} onChange={e=>setForm({...form, percentage: e.target.value})} />
+                                    <div className="flex items-center gap-2">
+                                        <input type="checkbox" id="is_active" checked={form.is_active} onChange={e=>setForm({...form, is_active: e.target.checked})} />
+                                        <label htmlFor="is_active">Aktif</label>
+                                    </div>
+                                    <div className="flex justify-end gap-2"><button type="button" onClick={closeBtn}>Batal</button><button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Simpan</button></div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
         // --- Hotel Config Main View ---
         const HotelConfigView = ({ session, showToast }) => {
             const [activeTab, setActiveTab] = useState('room_category');
@@ -726,6 +804,7 @@
                 { id: 'room_category', label: 'Room Category' },
                 { id: 'room_number', label: 'Room Number' },
                 { id: 'segmentation', label: 'Segmentation' },
+                { id: 'tax_service', label: 'Tax & Service' },
                 { id: 'rate', label: 'Rate Structure' },
                 { id: 'user', label: 'User Config' }
             ];
@@ -747,7 +826,8 @@
                             {activeTab === 'room_category' && <RoomCategorySetting tenantId={session.tenant_id} showToast={showToast} />}
                             {activeTab === 'room_number' && <RoomNumberSetting tenantId={session.tenant_id} showToast={showToast} />}
                             {activeTab === 'segmentation' && <SegmentationSetting tenantId={session.tenant_id} showToast={showToast} />}
-                            {!['room_category', 'room_number', 'segmentation'].includes(activeTab) && <div className="py-20 text-center text-gray-500">Fitur sedang dikembangkan.</div>}
+                            {activeTab === 'tax_service' && <TaxServiceSetting tenantId={session.tenant_id} showToast={showToast} />}
+                            {!['room_category', 'room_number', 'segmentation', 'tax_service'].includes(activeTab) && <div className="py-20 text-center text-gray-500">Fitur sedang dikembangkan.</div>}
                         </div>
                     </div>
                 </div>
