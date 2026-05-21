@@ -259,34 +259,51 @@
         const ReservationsView = ({ tenantId, showToast }) => {
             const [reservations, setReservations] = useState([]);
             const [rates, setRates] = useState([]);
+            const [categories, setCategories] = useState([]);
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [form, setForm] = useState({
                 guest_name: '',
                 check_in: '',
                 check_out: '',
                 total_amount: 0,
-                rate_code: ''
+                rate_code: '',
+                room_category_id: ''
             });
 
             const fetchData = async () => {
-                const [resR, resRates] = await Promise.all([
+                const [resR, resRates, resCats] = await Promise.all([
                     supabase.from('reservations').select('*').eq('tenant_id', tenantId).order('created_at', { ascending: false }),
-                    supabase.from('rate_structures').select('*').eq('tenant_id', tenantId).order('rate_code')
+                    supabase.from('rate_structures').select('*').eq('tenant_id', tenantId).order('rate_code'),
+                    supabase.from('room_categories').select('*').eq('tenant_id', tenantId).order('name')
                 ]);
                 if (resR.error) showToast("Gagal memuat reservasi: " + resR.error.message, "error");
                 if (resRates.error) showToast("Gagal memuat Rate: " + resRates.error.message, "error");
+                if (resCats.error) showToast("Gagal memuat kategori: " + resCats.error.message, "error");
+
                 if (resR.data) setReservations(resR.data);
                 if (resRates.data) setRates(resRates.data);
+                if (resCats.data) setCategories(resCats.data);
             };
             useEffect(() => { if(tenantId) fetchData(); }, [tenantId, showToast]);
 
-            const handleRateChange = (code) => {
-                const selectedRate = rates.find(r => r.rate_code === code);
-                if (selectedRate) {
-                    setForm({ ...form, rate_code: code, total_amount: selectedRate.room_rate });
-                } else {
-                    setForm({ ...form, rate_code: code });
+            const handleRateOrCategoryChange = (updates) => {
+                const newForm = { ...form, ...updates };
+                const selectedRate = rates.find(r => r.rate_code === newForm.rate_code);
+
+                if (newForm.rate_code === 'ADHOC') {
+                    setForm(newForm);
+                    return;
                 }
+
+                if (selectedRate) {
+                    let amount = selectedRate.room_rate;
+                    if (newForm.room_category_id && selectedRate.room_category_rates?.[newForm.room_category_id]) {
+                        amount = selectedRate.room_category_rates[newForm.room_category_id];
+                    }
+                    newForm.total_amount = amount;
+                }
+
+                setForm(newForm);
             };
 
             const isAdhoc = form.rate_code === 'ADHOC';
@@ -296,7 +313,8 @@
                 const { error } = await supabase.from('reservations').insert([{
                     tenant_id: tenantId, reservation_number: 'RES-' + Math.floor(Math.random() * 100000),
                     guest_name: form.guest_name, check_in: form.check_in, check_out: form.check_out,
-                    total_amount: form.total_amount, status: 'confirmed'
+                    total_amount: form.total_amount, status: 'confirmed',
+                    rate_code: form.rate_code, room_category_id: form.room_category_id
                 }]);
                 if (error) { showToast(error.message, "error"); }
                 else { showToast("Berhasil!", "success"); setIsModalOpen(false); fetchData(); }
@@ -875,9 +893,10 @@
                 rate_name: '',
                 room_rate: '',
                 expiry_date: '',
-                room_category_ids: []
+                room_category_ids: [],
+                room_category_rates: {}
             });
-            const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+            const [bulkSelection, setBulkSelection] = useState([]);
 
             const fetchData = useCallback(async () => {
                 const [resR, resC] = await Promise.all([
@@ -894,7 +913,8 @@
 
             const openAdd = () => {
                 setEditingItem(null);
-                setForm({ rate_code: '', rate_name: '', room_rate: '', expiry_date: '', room_category_ids: [] });
+                setForm({ rate_code: '', rate_name: '', room_rate: '', expiry_date: '', room_category_ids: [], room_category_rates: {} });
+                setBulkSelection([]);
                 setIsModalOpen(true);
             };
             const openEdit = (item) => {
@@ -904,20 +924,25 @@
                     rate_name: item.rate_name,
                     room_rate: item.room_rate,
                     expiry_date: item.expiry_date || '',
-                    room_category_ids: item.room_category_ids || []
+                    room_category_ids: item.room_category_ids || [],
+                    room_category_rates: item.room_category_rates || {}
                 });
+                setBulkSelection(item.room_category_ids || []);
                 setIsModalOpen(true);
             };
             const closeBtn = () => {
                 setIsModalOpen(false);
-                setShowCategoryDropdown(false);
             };
 
             const handleSubmit = async (e) => {
                 e.preventDefault();
                 try {
                     let res;
-                    const payload = { ...form, tenant_id: tenantId };
+                    const payload = {
+                        ...form,
+                        tenant_id: tenantId,
+                        room_category_ids: bulkSelection
+                    };
                     if (editingItem) {
                         res = await supabase.from('rate_structures').update(payload).eq('id', editingItem.id);
                     } else {
@@ -928,15 +953,33 @@
                 } catch (err) { showToast("Gagal simpan: " + err.message, "error"); }
             };
 
-            const toggleCategory = (catId) => {
-                const current = [...form.room_category_ids];
-                const index = current.indexOf(catId);
-                if (index > -1) {
-                    current.splice(index, 1);
-                } else {
-                    current.push(catId);
+            const toggleBulkSelection = (catId) => {
+                setBulkSelection(prev =>
+                    prev.includes(catId) ? prev.filter(id => id !== catId) : [...prev, catId]
+                );
+            };
+
+            const handleIndividualRateChange = (catId, value) => {
+                setForm(prev => ({
+                    ...prev,
+                    room_category_rates: {
+                        ...prev.room_category_rates,
+                        [catId]: value
+                    }
+                }));
+            };
+
+            const applyBaseRateToSelected = () => {
+                if (!form.room_rate) {
+                    showToast("Isi Base Price terlebih dahulu", "error");
+                    return;
                 }
-                setForm({ ...form, room_category_ids: current });
+                const newRates = { ...form.room_category_rates };
+                bulkSelection.forEach(id => {
+                    newRates[id] = form.room_rate;
+                });
+                setForm(prev => ({ ...prev, room_category_rates: newRates }));
+                showToast(`Base Price diterapkan ke ${bulkSelection.length} kategori`);
             };
 
             const getCategoryName = (id) => categories.find(c => c.id === id)?.name || id;
@@ -953,7 +996,7 @@
                                 <tr>
                                     <th className="p-4 text-gray-500 font-medium">Code</th>
                                     <th className="p-4 text-gray-500 font-medium">Name</th>
-                                    <th className="p-4 text-gray-500 font-medium">Rate</th>
+                                    <th className="p-4 text-gray-500 font-medium">Base Rate</th>
                                     <th className="p-4 text-gray-500 font-medium">Room Types Mapping</th>
                                     <th className="p-4 text-gray-500 font-medium">Expiry</th>
                                     <th className="p-4 text-right text-gray-500 font-medium">Aksi</th>
@@ -967,9 +1010,16 @@
                                         <td className="p-4 font-mono font-bold text-gray-800">Rp {Number(item.room_rate).toLocaleString('id-ID')}</td>
                                         <td className="p-4">
                                             <div className="flex flex-wrap gap-1 max-w-xs">
-                                                {item.room_category_ids?.map(id => (
-                                                    <span key={id} className="bg-blue-50 text-blue-600 text-[10px] px-2 py-0.5 rounded-full border border-blue-100 font-medium">{getCategoryName(id)}</span>
-                                                ))}
+                                                {item.room_category_ids?.map(id => {
+                                                    const specificRate = item.room_category_rates?.[id];
+                                                    const isDifferent = specificRate && Number(specificRate) !== Number(item.room_rate);
+                                                    return (
+                                                        <span key={id} className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${isDifferent ? 'bg-orange-50 text-orange-600 border-orange-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
+                                                            {getCategoryName(id)}
+                                                            {isDifferent && <span className="ml-1 opacity-75">(Rp {Number(specificRate).toLocaleString('id-ID')})</span>}
+                                                        </span>
+                                                    );
+                                                })}
                                                 {(!item.room_category_ids || item.room_category_ids.length === 0) && <span className="text-gray-400 italic text-xs">All Room Types</span>}
                                             </div>
                                         </td>
@@ -993,75 +1043,114 @@
 
                     {isModalOpen && (
                         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                            <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl animate-in fade-in zoom-in duration-200">
+                            <div className="bg-white rounded-2xl p-8 w-full max-w-4xl shadow-2xl animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-hidden flex flex-col">
                                 <div className="flex justify-between items-center mb-6">
                                     <h3 className="text-xl font-bold text-gray-800">{editingItem ? 'Edit' : 'Tambah'} Rate Structure</h3>
                                     <button onClick={closeBtn} className="text-gray-400 hover:text-gray-600"><Icons.Close /></button>
                                 </div>
-                                <form onSubmit={handleSubmit} className="space-y-5">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider">Rate Code</label>
-                                            <input required className="w-full border border-gray-300 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all uppercase" placeholder="Cth: SAVE01" value={form.rate_code} onChange={e=>setForm({...form, rate_code: e.target.value.toUpperCase()})} />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider">Expiry Date</label>
-                                            <input type="date" className="w-full border border-gray-300 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={form.expiry_date} onChange={e=>setForm({...form, expiry_date: e.target.value})} />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider">Rate Name</label>
-                                        <input required className="w-full border border-gray-300 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="Cth: Early Bird Promo" value={form.rate_name} onChange={e=>setForm({...form, rate_name: e.target.value})} />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider">Room Rate (Base Price)</label>
-                                        <input required type="number" className="w-full border border-gray-300 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-mono text-lg" placeholder="0" value={form.room_rate} onChange={e=>setForm({...form, room_rate: e.target.value})} />
-                                    </div>
 
-                                    <div className="relative">
-                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider">Mapping Room Type</label>
-                                        <div
-                                            className="min-h-[52px] w-full border border-gray-300 rounded-xl p-2 flex flex-wrap gap-2 cursor-pointer bg-white items-center pr-10 focus-within:ring-2 focus-within:ring-blue-500 transition-all"
-                                            onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
-                                        >
-                                            {form.room_category_ids.length === 0 && <span className="text-gray-400 px-2 text-sm italic">Pilih Tipe Kamar (Bulk Select)...</span>}
-                                            {form.room_category_ids.map(id => (
-                                                <div key={id} className="bg-blue-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-2 shadow-sm animate-in zoom-in duration-150">
-                                                    {getCategoryName(id)}
-                                                    <span
-                                                        className="hover:bg-blue-700 rounded-full w-4 h-4 flex items-center justify-center cursor-pointer transition-colors"
-                                                        onClick={(e) => { e.stopPropagation(); toggleCategory(id); }}
-                                                    >×</span>
+                                <form onSubmit={handleSubmit} className="flex-1 overflow-hidden flex flex-col">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 flex-1 overflow-hidden">
+                                        {/* Left Column: General Info */}
+                                        <div className="space-y-5">
+                                            <div className="bg-gray-50 p-6 rounded-2xl space-y-5 border border-gray-100">
+                                                <h4 className="font-bold text-gray-700 text-sm border-b pb-2">Informasi Umum</h4>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider">Rate Code</label>
+                                                        <input required className="w-full border border-gray-300 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all uppercase" placeholder="Cth: SAVE01" value={form.rate_code} onChange={e=>setForm({...form, rate_code: e.target.value.toUpperCase()})} />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider">Expiry Date</label>
+                                                        <input type="date" className="w-full border border-gray-300 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={form.expiry_date} onChange={e=>setForm({...form, expiry_date: e.target.value})} />
+                                                    </div>
                                                 </div>
-                                            ))}
-                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-                                                <svg className={`w-5 h-5 transition-transform duration-200 ${showCategoryDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                                                <div>
+                                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider">Rate Name</label>
+                                                    <input required className="w-full border border-gray-300 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="Cth: Early Bird Promo" value={form.rate_name} onChange={e=>setForm({...form, rate_name: e.target.value})} />
+                                                </div>
+                                                <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                                                    <label className="block text-xs font-bold text-blue-600 uppercase mb-2 tracking-wider">Base Price (Master)</label>
+                                                    <div className="relative">
+                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-600 font-bold">Rp</span>
+                                                        <input required type="number" className="w-full border border-blue-200 p-3 pl-10 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-mono text-lg text-blue-700" placeholder="0" value={form.room_rate} onChange={e=>setForm({...form, room_rate: e.target.value})} />
+                                                    </div>
+                                                    <p className="text-[10px] text-blue-500 mt-2 italic">* Gunakan untuk mengisi otomatis harga di tabel mapping.</p>
+                                                </div>
                                             </div>
                                         </div>
 
-                                        {showCategoryDropdown && (
-                                            <>
-                                                <div className="fixed inset-0 z-[60]" onClick={() => setShowCategoryDropdown(false)}></div>
-                                                <div className="absolute left-0 right-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl z-[70] max-h-56 overflow-y-auto py-2 animate-in slide-in-from-top-2 duration-200">
-                                                    {categories.map(cat => (
-                                                        <div
-                                                            key={cat.id}
-                                                            className={`px-5 py-3 text-sm cursor-pointer flex items-center justify-between hover:bg-blue-50 transition-colors ${form.room_category_ids.includes(cat.id) ? 'bg-blue-50 text-blue-700 font-bold' : 'text-gray-700'}`}
-                                                            onClick={() => toggleCategory(cat.id)}
-                                                        >
-                                                            {cat.name}
-                                                            {form.room_category_ids.includes(cat.id) && <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>}
-                                                        </div>
-                                                    ))}
-                                                    {categories.length === 0 && <div className="p-6 text-center text-gray-400 text-sm italic">Belum ada tipe kamar yang terdaftar.</div>}
-                                                </div>
-                                            </>
-                                        )}
+                                        {/* Right Column: Mapping & Bulk Update */}
+                                        <div className="flex flex-col overflow-hidden border border-gray-200 rounded-2xl">
+                                            <div className="p-4 bg-gray-50 border-b flex justify-between items-center">
+                                                <h4 className="font-bold text-gray-700 text-sm">Room Category Mapping</h4>
+                                                <button
+                                                    type="button"
+                                                    onClick={applyBaseRateToSelected}
+                                                    disabled={bulkSelection.length === 0}
+                                                    className={`text-xs px-3 py-1.5 rounded-lg font-bold transition-all ${bulkSelection.length > 0 ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                                                >
+                                                    Terapkan Base Price ({bulkSelection.length})
+                                                </button>
+                                            </div>
+                                            <div className="flex-1 overflow-y-auto">
+                                                <table className="w-full text-sm">
+                                                    <thead className="sticky top-0 bg-white border-b shadow-sm z-10">
+                                                        <tr>
+                                                            <th className="p-3 w-10">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    className="rounded"
+                                                                    checked={categories.length > 0 && bulkSelection.length === categories.length}
+                                                                    onChange={(e) => {
+                                                                        if (e.target.checked) setBulkSelection(categories.map(c => c.id));
+                                                                        else setBulkSelection([]);
+                                                                    }}
+                                                                />
+                                                            </th>
+                                                            <th className="p-3 text-left text-gray-500 font-medium">Category</th>
+                                                            <th className="p-3 text-left text-gray-500 font-medium">Rate per Category</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y">
+                                                        {categories.map(cat => (
+                                                            <tr key={cat.id} className={`hover:bg-blue-50/30 transition-colors ${bulkSelection.includes(cat.id) ? 'bg-blue-50/50' : ''}`}>
+                                                                <td className="p-3 text-center">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        className="rounded text-blue-600"
+                                                                        checked={bulkSelection.includes(cat.id)}
+                                                                        onChange={() => toggleBulkSelection(cat.id)}
+                                                                    />
+                                                                </td>
+                                                                <td className="p-3">
+                                                                    <div className="font-medium text-gray-800">{cat.name}</div>
+                                                                    <div className="text-[10px] text-gray-400 uppercase tracking-tighter">Capacity: {cat.capacity} pax</div>
+                                                                </td>
+                                                                <td className="p-3">
+                                                                    <div className="relative">
+                                                                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">Rp</span>
+                                                                        <input
+                                                                            type="number"
+                                                                            className="w-full border border-gray-200 p-2 pl-8 rounded-lg text-sm font-mono focus:ring-1 focus:ring-blue-400 outline-none"
+                                                                            placeholder="0"
+                                                                            value={form.room_category_rates[cat.id] || ''}
+                                                                            onChange={(e) => handleIndividualRateChange(cat.id, e.target.value)}
+                                                                        />
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                        {categories.length === 0 && <tr><td colSpan="3" className="p-8 text-center text-gray-400 italic">Belum ada tipe kamar.</td></tr>}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
                                     </div>
 
-                                    <div className="flex justify-end gap-3 pt-6 border-t border-gray-100">
+                                    <div className="flex justify-end gap-3 pt-6 border-t border-gray-100 mt-6">
                                         <button type="button" onClick={closeBtn} className="px-6 py-2.5 text-gray-500 font-medium hover:text-gray-700 transition-colors">Batal</button>
-                                        <button type="submit" className="bg-blue-600 text-white px-8 py-2.5 rounded-xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all">Simpan Rate</button>
+                                        <button type="submit" className="bg-blue-600 text-white px-8 py-2.5 rounded-xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all">Simpan Rate Structure</button>
                                     </div>
                                 </form>
                             </div>
