@@ -804,6 +804,220 @@
             );
         };
 
+        // --- Article Setting ---
+        const ArticleSetting = ({ tenantId, showToast }) => {
+            const [articles, setArticles] = useState([]);
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [editingItem, setEditingItem] = useState(null);
+            const [form, setForm] = useState({
+                article_code: '',
+                article_name: '',
+                type: 'SALES',
+                is_taxable: false,
+                is_service_chargeable: false,
+                gl_code: '',
+                is_active: true
+            });
+
+            const fetchArticles = useCallback(async () => {
+                const { data, error } = await supabase.from('articles').select('*').eq('tenant_id', tenantId).order('article_code');
+                if (error) showToast("Gagal memuat Articles: " + error.message, "error");
+                if (data) setArticles(data);
+            }, [tenantId, showToast]);
+
+            useEffect(() => { fetchArticles(); }, [fetchArticles]);
+
+            const openAdd = () => {
+                setEditingItem(null);
+                setForm({
+                    article_code: '',
+                    article_name: '',
+                    type: 'SALES',
+                    is_taxable: false,
+                    is_service_chargeable: false,
+                    gl_code: '',
+                    is_active: true
+                });
+                setIsModalOpen(true);
+            };
+
+            const openEdit = (item) => {
+                setEditingItem(item);
+                setForm({
+                    article_code: item.article_code,
+                    article_name: item.article_name,
+                    type: item.type,
+                    is_taxable: item.is_taxable,
+                    is_service_chargeable: item.is_service_chargeable,
+                    gl_code: item.gl_code || '',
+                    is_active: item.is_active
+                });
+                setIsModalOpen(true);
+            };
+
+            const closeBtn = () => setIsModalOpen(false);
+
+            const handleTypeChange = (newType) => {
+                const updates = { type: newType };
+                if (newType === 'PAYMENT') {
+                    updates.is_taxable = false;
+                    updates.is_service_chargeable = false;
+                }
+                setForm(prev => ({ ...prev, ...updates }));
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                try {
+                    let res;
+                    if (editingItem) {
+                        res = await supabase.from('articles').update(form).eq('id', editingItem.id);
+                    } else {
+                        res = await supabase.from('articles').insert([{ ...form, tenant_id: tenantId }]);
+                    }
+                    if (res.error) {
+                        if (res.error.code === '23505') throw new Error("Kode Artikel sudah digunakan.");
+                        throw res.error;
+                    }
+                    setIsModalOpen(false);
+                    fetchArticles();
+                    showToast("Berhasil simpan Article!");
+                } catch (err) {
+                    showToast("Gagal simpan: " + err.message, "error");
+                }
+            };
+
+            return (
+                <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                        <h3 className="font-bold text-lg text-gray-800">Master Articles (Transaction Codes)</h3>
+                        <button onClick={openAdd} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm flex items-center gap-1 hover:bg-blue-700 transition-colors shadow-sm">
+                            <Icons.Plus /> Tambah Article
+                        </button>
+                    </div>
+                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-gray-50 border-b border-gray-200">
+                                <tr>
+                                    <th className="p-4 text-gray-500 font-medium">Code</th>
+                                    <th className="p-4 text-gray-500 font-medium">Name</th>
+                                    <th className="p-4 text-gray-500 font-medium">Type</th>
+                                    <th className="p-4 text-gray-500 font-medium">Tax / Service</th>
+                                    <th className="p-4 text-gray-500 font-medium">GL Code</th>
+                                    <th className="p-4 text-gray-500 font-medium">Status</th>
+                                    <th className="p-4 text-right text-gray-500 font-medium">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {articles.map(item => (
+                                    <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                                        <td className="p-4 font-bold text-blue-600">{item.article_code}</td>
+                                        <td className="p-4 text-gray-700 font-medium">{item.article_name}</td>
+                                        <td className="p-4">
+                                            <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${item.type === 'SALES' ? 'bg-purple-100 text-purple-700' : 'bg-orange-100 text-orange-700'}`}>
+                                                {item.type}
+                                            </span>
+                                        </td>
+                                        <td className="p-4">
+                                            <div className="flex gap-2">
+                                                {item.is_taxable && <span className="bg-blue-50 text-blue-600 border border-blue-100 px-1.5 py-0.5 rounded text-[10px] font-medium">TAX</span>}
+                                                {item.is_service_chargeable && <span className="bg-indigo-50 text-indigo-600 border border-indigo-100 px-1.5 py-0.5 rounded text-[10px] font-medium">SVC</span>}
+                                                {!item.is_taxable && !item.is_service_chargeable && <span className="text-gray-400 text-[10px]">-</span>}
+                                            </div>
+                                        </td>
+                                        <td className="p-4 text-gray-500 font-mono">{item.gl_code || '-'}</td>
+                                        <td className="p-4">
+                                            <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${item.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                {item.is_active ? 'Active' : 'Inactive'}
+                                            </span>
+                                        </td>
+                                        <td className="p-4 text-right space-x-3">
+                                            <button onClick={() => openEdit(item)} className="text-blue-600 hover:text-blue-800"><Icons.Edit /></button>
+                                            <button onClick={async () => {
+                                                if(confirm("Hapus artikel ini? Disarankan untuk me-nonaktifkan saja jika sudah pernah digunakan.")) {
+                                                    const { error } = await supabase.from('articles').delete().eq('id', item.id);
+                                                    if (error) showToast("Gagal hapus: " + error.message, "error");
+                                                    else { showToast("Data dihapus!"); fetchArticles(); }
+                                                }
+                                            }} className="text-red-500 hover:text-red-700"><Icons.Trash /></button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {articles.length === 0 && <tr><td colSpan="7" className="p-12 text-center text-gray-400 italic">Belum ada data Article.</td></tr>}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {isModalOpen && (
+                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl animate-in fade-in zoom-in duration-200">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h3 className="text-xl font-bold text-gray-800">{editingItem ? 'Edit' : 'Tambah'} Article</h3>
+                                    <button onClick={closeBtn} className="text-gray-400 hover:text-gray-600"><Icons.Close /></button>
+                                </div>
+                                <form onSubmit={handleSubmit} className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Article Code</label>
+                                            <input required className="w-full border border-gray-300 p-2.5 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all uppercase"
+                                                placeholder="Cth: 1000" value={form.article_code} onChange={e=>setForm({...form, article_code: e.target.value.toUpperCase()})} />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Type</label>
+                                            <select required className="w-full border border-gray-300 p-2.5 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                                value={form.type} onChange={e => handleTypeChange(e.target.value)}>
+                                                <option value="SALES">SALES</option>
+                                                <option value="PAYMENT">PAYMENT</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Article Name</label>
+                                        <input required className="w-full border border-gray-300 p-2.5 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                            placeholder="Cth: Room Charge" value={form.article_name} onChange={e=>setForm({...form, article_name: e.target.value})} />
+                                    </div>
+                                    <div className="bg-gray-50 p-4 rounded-xl space-y-3 border border-gray-100">
+                                        <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Flags & Taxes</h4>
+                                        <div className="flex gap-6">
+                                            <label className={`flex items-center gap-2 cursor-pointer ${form.type === 'PAYMENT' ? 'opacity-40 grayscale cursor-not-allowed' : ''}`}>
+                                                <input type="checkbox" className="w-4 h-4 rounded text-blue-600" checked={form.is_taxable}
+                                                    disabled={form.type === 'PAYMENT'} onChange={e=>setForm({...form, is_taxable: e.target.checked})} />
+                                                <span className="text-sm font-medium text-gray-700">Taxable (PB1)</span>
+                                            </label>
+                                            <label className={`flex items-center gap-2 cursor-pointer ${form.type === 'PAYMENT' ? 'opacity-40 grayscale cursor-not-allowed' : ''}`}>
+                                                <input type="checkbox" className="w-4 h-4 rounded text-blue-600" checked={form.is_service_chargeable}
+                                                    disabled={form.type === 'PAYMENT'} onChange={e=>setForm({...form, is_service_chargeable: e.target.checked})} />
+                                                <span className="text-sm font-medium text-gray-700">Service Chg</span>
+                                            </label>
+                                        </div>
+                                        {form.type === 'PAYMENT' && <p className="text-[9px] text-orange-500 italic">* Payment type cannot have tax/service</p>}
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">GL Account Code</label>
+                                            <input className="w-full border border-gray-300 p-2.5 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                                placeholder="Cth: 4000-01" value={form.gl_code} onChange={e=>setForm({...form, gl_code: e.target.value})} />
+                                        </div>
+                                        <div className="flex items-end pb-3">
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                <input type="checkbox" className="w-4 h-4 rounded text-green-600" checked={form.is_active}
+                                                    onChange={e=>setForm({...form, is_active: e.target.checked})} />
+                                                <span className="text-sm font-medium text-gray-700">Active Status</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-end gap-3 pt-4">
+                                        <button type="button" onClick={closeBtn} className="px-5 py-2.5 text-gray-500 font-medium hover:text-gray-700 transition-colors">Batal</button>
+                                        <button type="submit" className="bg-blue-600 text-white px-8 py-2.5 rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all">Simpan</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
         // --- Tax & Service Setting ---
         const TaxServiceSetting = ({ tenantId, showToast }) => {
             const [taxes, setTaxes] = useState([]);
@@ -1168,6 +1382,7 @@
                 { id: 'room_number', label: 'Room Number' },
                 { id: 'segmentation', label: 'Segmentation' },
                 { id: 'tax_service', label: 'Tax & Service' },
+                { id: 'article', label: 'Articles' },
                 { id: 'rate', label: 'Rate Structure' },
                 { id: 'user', label: 'User Config' }
             ];
@@ -1190,8 +1405,9 @@
                             {activeTab === 'room_number' && <RoomNumberSetting tenantId={session.tenant_id} showToast={showToast} />}
                             {activeTab === 'segmentation' && <SegmentationSetting tenantId={session.tenant_id} showToast={showToast} />}
                             {activeTab === 'tax_service' && <TaxServiceSetting tenantId={session.tenant_id} showToast={showToast} />}
+                            {activeTab === 'article' && <ArticleSetting tenantId={session.tenant_id} showToast={showToast} />}
                             {activeTab === 'rate' && <RateStructureSetting tenantId={session.tenant_id} showToast={showToast} />}
-                            {!['room_category', 'room_number', 'segmentation', 'tax_service', 'rate'].includes(activeTab) && <div className="py-20 text-center text-gray-500">Fitur sedang dikembangkan.</div>}
+                            {!['room_category', 'room_number', 'segmentation', 'tax_service', 'article', 'rate'].includes(activeTab) && <div className="py-20 text-center text-gray-500">Fitur sedang dikembangkan.</div>}
                         </div>
                     </div>
                 </div>
